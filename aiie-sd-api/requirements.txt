@@ -1,0 +1,16 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.4.2
+torch
+diffusers>=0.30.3
+transformers>=4.46.1
+accelerate>=0.33.0
+safetensors 
+python-multipart
+aiohttp
+opencv-python
+numpy
+pydantic-settings
+pillow
+minio
+gfpgan

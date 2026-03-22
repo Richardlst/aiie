@@ -1,0 +1,297 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Segoe UI', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  --info-gradient: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --bg-light: #f5f7fa;
+  --bg-lighter: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --border-light: #e8e8e8;
+}
+
+body {
+  background: linear-gradient(135deg, #fae9ef 0%, #f3d6c4 50%, #e8c8b5 100%);
+  color: var(--text-primary);
+}
+
+.border-gradient-to-r {
+  border-image: linear-gradient(to right, #7c5aff, #5cb8e6) 1;
+}
+
+/* Custom shadow effects - Modern and colorful */
+.shadow-card {
+  box-shadow: 0px 10px 30px rgba(102, 126, 234, 0.15), 0px 2px 8px rgba(118, 75, 162, 0.1);
+}
+
+.shadow-card-hover {
+  box-shadow: 0px 20px 40px rgba(102, 126, 234, 0.25), 0px 5px 15px rgba(118, 75, 162, 0.15);
+}
+
+/* Gradient text effect */
+.gradient-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-text-alt {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Button hover effects */
+.btn-gradient {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0px 8px 20px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s ease;
+}
+
+.btn-gradient::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 100%);
+  transition: left 0.5s ease;
+}
+
+.btn-gradient:hover::before {
+  left: 100%;
+}
+
+.btn-gradient:hover {
+  box-shadow: 0px 12px 30px rgba(102, 126, 234, 0.5);
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* Card hover effects */
+.card-hover-effect {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-hover-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+.card-hover-effect:hover::before {
+  opacity: 1;
+}
+
+.card-hover-effect:hover {
+  transform: translateY(-8px);
+  box-shadow: 0px 20px 40px rgba(102, 126, 234, 0.25), 0px 5px 15px rgba(118, 75, 162, 0.15);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.card-hover-effect > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* For search container with gradient border */
+.search-container {
+  position: relative;
+  padding: 2px;
+  border-radius: 12px;
+  background: linear-gradient(to right, #7c5aff, #5cb8e6);
+}
+
+.search-container-inner {
+  background: white;
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+/* Disabled button styles */
+.ant-btn-primary[disabled] {
+  background: linear-gradient(to right, #7c5aff, #5cb8e6) !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  border: none !important;
+}
+
+.ant-btn-primary[disabled]:hover {
+  opacity: 0.5 !important;
+  background: linear-gradient(to right, #7c5aff, #5cb8e6) !important;
+}
+
+/* Custom menu styling for modern look */
+.custom-menu .ant-menu-item {
+  border-radius: 12px;
+  margin: 6px 8px;
+  background-color: transparent;
+  transition: all 0.3s ease;
+  color: #4a5568;
+  padding: 10px 16px;
+}
+
+.custom-menu .ant-menu-item:hover {
+  background: linear-gradient(135deg, rgba(124, 90, 255, 0.12), rgba(92, 184, 230, 0.12)) !important;
+  color: #5a3fd8 !important;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(124, 90, 255, 0.2);
+}
+
+.custom-menu .ant-menu-item-selected {
+  background: linear-gradient(135deg, rgba(124, 90, 255, 0.18), rgba(92, 184, 230, 0.18)) !important;
+  color: #5a3fd8 !important;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(124, 90, 255, 0.25);
+  transform: translateX(4px);
+}
+
+.custom-menu .ant-menu-item-selected::after {
+  display: none;
+}
+
+/* Ant Design form styles - modern */
+.ant-form-item-label > label {
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.ant-form-item-control-input-content input,
+.ant-form-item-control-input-content textarea,
+.ant-select {
+  border-radius: 8px !important;
+  border-color: #e8e8e8 !important;
+  transition: all 0.2s ease;
+}
+
+.ant-form-item-control-input-content input:focus,
+.ant-form-item-control-input-content textarea:focus,
+.ant-select-focused .ant-select-selector {
+  border-color: #7c5aff !important;
+  box-shadow: 0 0 0 3px rgba(124, 90, 255, 0.1) !important;
+}
+
+/* Primary button styling */
+.ant-btn-primary {
+  background: linear-gradient(to right, #7c5aff, #5cb8e6) !important;
+  border: none !important;
+  box-shadow: 0px 4px 12px rgba(124, 90, 255, 0.3);
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border-radius: 8px;
+}
+
+.ant-btn-primary:hover {
+  box-shadow: 0px 8px 20px rgba(124, 90, 255, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+/* Modal and overlay styling */
+.ant-modal-content {
+  border-radius: 12px;
+  box-shadow: 0px 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* General text colors */
+.ant-typography {
+  color: #1a1a1a;
+}
+
+/* Ant Design Table styling */
+.ant-table {
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+}
+
+.ant-table-thead > tr > th {
+  background: linear-gradient(to right, rgba(124, 90, 255, 0.05), rgba(92, 184, 230, 0.05));
+  color: #1a1a1a;
+  font-weight: 600;
+  border-bottom: 2px solid #e8e8e8;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: #f5f7fa;
+}
+
+/* Ant Design Checkbox styling */
+.ant-checkbox-wrapper {
+  color: #1a1a1a;
+}
+
+.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: #7c5aff;
+  border-color: #7c5aff;
+}
+
+/* Ant Design Radio styling */
+.ant-radio-wrapper {
+  color: #1a1a1a;
+}
+
+.ant-radio-checked .ant-radio-inner {
+  border-color: #7c5aff;
+}
+
+.ant-radio-checked .ant-radio-inner::after {
+  background-color: #7c5aff;
+}
+
+/* Ant Design Tabs */
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #7c5aff;
+}
+
+.ant-tabs-ink-bar {
+  background: linear-gradient(to right, #7c5aff, #5cb8e6);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(to right, #7c5aff, #5cb8e6);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to right, #6d4bc9, #4a9ac9);
+}

@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Build / distribution
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Env files
+.env
+.env.*
+
+# Models (large binary files)
+aiie-sd-api/models/
+aiie-srgan-api/models/
+aiie-sd-api/gfpgan/weights/
+aiie-sd-api/sdxl_light_caption_output/checkpoint-*/
+
+# Logs
+*.log
+minio.log
+app.log
+
+# Node / UI
+aiie-ui/node_modules/
+aiie-ui/dist/
+aiie-ui/*.tsbuildinfo
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+.DS_Store
+*.tmp

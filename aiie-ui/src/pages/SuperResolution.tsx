@@ -1,0 +1,301 @@
+import { useState, useRef } from "react";
+import {
+  Upload,
+  Button,
+  Card,
+  Row,
+  Col,
+  message,
+  Image,
+  Typography,
+} from "antd";
+import type { UploadFile } from "antd/es/upload/interface";
+import { ImageIcon, Wand2, Settings } from "lucide-react";
+import { FormOutlined, PictureOutlined } from "@ant-design/icons";
+
+import UploadButton from "../components/UploadButton";
+import { handlePreviewCallback } from "../utils";
+import { saveImage, superResolutionApi } from "../services/apis";
+import DisplayImage from "../components/DisplayImage";
+
+const { Title, Paragraph } = Typography;
+
+const SuperResolution = () => {
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [processedImages, setProcessedImages] = useState<{
+    original: string;
+    enhanced: string;
+  } | null>(null);
+  const [messageApi, contextHolder] = message.useMessage();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  const handlePreview = handlePreviewCallback(setPreviewImage, setPreviewOpen);
+
+  const handleUpload = async () => {
+    if (fileList.length === 0) {
+      messageApi.error("Please upload an image");
+      return;
+    }
+
+    setLoading(true);
+    setProcessedImages(null);
+    try {
+      const file = await saveImage(fileList[0]);
+      const uploadImageUrl = file.data.url;
+
+      const responseData = await superResolutionApi(uploadImageUrl);
+
+      const downloadUrl = responseData.image_url;
+
+      setProcessedImages({
+        original: uploadImageUrl,
+        enhanced: downloadUrl,
+      });
+
+      // Scroll to results after images are set
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    } catch (error) {
+      console.error("Error processing image:", error);
+      messageApi.error("Failed to process image");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto p-6">
+      {contextHolder}
+
+      {/* Header Section */}
+      <div className="rounded-2xl mb-12 p-10 bg-gradient-to-r from-[#fbc7d4] to-[#9796f0] text-white shadow-card" style={{
+        boxShadow: '0 8px 24px rgba(251, 199, 212, 0.35)'
+      }}>
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm mb-4">
+            <Wand2 size={32} className="text-white" />
+          </div>
+          <Title style={{ color: "white" }} level={1} className="mb-6">
+            Super Resolution
+          </Title>
+          <Paragraph className="text-lg mt-4 mb-8 max-w-3xl mx-auto text-white/90">
+            Transform your low-resolution images into crystal-clear,
+            high-quality versions using our advanced AI technology. Perfect for
+            enhancing old photos, improving digital art, or upscaling web
+            images.
+          </Paragraph>
+        </div>
+      </div>
+
+      {/* Row 1: Upload Image and How It Works */}
+      <Row gutter={[24, 24]} className="mb-8">
+        <Col xs={24} md={12}>
+          <Card className="shadow-card border-gray-100 h-full">
+            <Title level={4} className="mb-4">
+              How It Works
+            </Title>
+
+            <div className="bg-white rounded-lg p-6 border border-gray-200">
+              <Title level={5} className="mb-4 gradient-text">
+                Process Overview
+              </Title>
+              <ul className="space-y-3 text-gray-600">
+                <li className="flex items-start">
+                  <div
+                    className="mr-3 p-1 rounded-full"
+                    style={{ backgroundColor: "#fbc7d415" }}
+                  >
+                    <ImageIcon
+                      className="w-4 h-4"
+                      style={{ color: "#fbc7d4" }}
+                    />
+                  </div>
+                  <span>Upload your low-resolution image for enhancement</span>
+                </li>
+                <li className="flex items-start">
+                  <div
+                    className="mr-3 p-1 rounded-full"
+                    style={{ backgroundColor: "#9796f015" }}
+                  >
+                    <Wand2 className="w-4 h-4" style={{ color: "#9796f0" }} />
+                  </div>
+                  <span>Our AI model analyzes and enhances your image</span>
+                </li>
+                <li className="flex items-start">
+                  <div
+                    className="mr-3 p-1 rounded-full"
+                    style={{ backgroundColor: "#fbc7d415" }}
+                  >
+                    <Settings
+                      className="w-4 h-4"
+                      style={{ color: "#fbc7d4" }}
+                    />
+                  </div>
+                  <span>Download your enhanced high-resolution image</span>
+                </li>
+              </ul>
+
+              <div className="mt-6 p-4 bg-white/50 rounded-lg border border-gray-100">
+                <Title level={5} className="mb-3">
+                  Supported Formats
+                </Title>
+                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                  <div>• PNG</div>
+                  <div>• JPEG/JPG</div>
+                  <div>• WebP</div>
+                  <div>• GIF (static)</div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card
+            className="shadow-md border-gray-100 h-full"
+            title={
+              <div className="flex items-center gap-3">
+                <div
+                  className="p-2 rounded-lg"
+                  style={{ backgroundColor: "#7c5aff15" }}
+                >
+                  <ImageIcon className="w-5 h-5 text-[#7c5aff]" />
+                </div>
+                <span className="text-lg font-medium">Upload Image</span>
+              </div>
+            }
+          >
+            <div className="flex flex-col items-center justify-center p-4">
+              <Upload
+                fileList={fileList}
+                onChange={({ fileList }) => {
+                  if (fileList.length > 1) {
+                    messageApi.warning(
+                      "Only one image can be uploaded at a time"
+                    );
+                    setFileList([fileList[fileList.length - 1]]);
+                  } else {
+                    setFileList(fileList);
+                  }
+                }}
+                onPreview={handlePreview}
+                beforeUpload={(file) => {
+                  const isLt10M = file.size / 1024 / 1024 < 10;
+                  if (!isLt10M) {
+                    messageApi.error("File size must be smaller than 10MB!");
+                    return Upload.LIST_IGNORE;
+                  }
+                  return false;
+                }}
+                multiple={false}
+                accept="image/*"
+                listType="picture-circle"
+              >
+                {fileList.length === 0 ? <UploadButton /> : null}
+              </Upload>
+
+              <div className="w-full mt-6 space-y-3">
+                <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200">
+                  <div className="p-2 bg-blue-100 rounded-full mr-3">
+                    <PictureOutlined className="text-[#7c5aff]" />
+                  </div>
+                  <div className="text-sm">
+                    <p className="font-medium text-gray-800">
+                      High Quality Images
+                    </p>
+                    <p className="text-gray-600">
+                      For best results, use clear, high-resolution images
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center p-3 bg-white rounded-lg border border-gray-200">
+                  <div className="p-2 bg-purple-100 rounded-full mr-3">
+                    <Settings className="text-[#5cb8e6]" />
+                  </div>
+                  <div className="text-sm">
+                    <p className="font-medium text-gray-800">
+                      Automatic Processing
+                    </p>
+                    <p className="text-gray-600">
+                      Our AI will enhance your image automatically
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Row 2: Process Button */}
+      <Card className="shadow-md border-gray-100 mb-8 p-0">
+        <div className="flex justify-center">
+          <Button
+            type="primary"
+            onClick={handleUpload}
+            icon={<FormOutlined />}
+            loading={loading}
+            disabled={fileList.length === 0}
+            size="large"
+            className="w-full"
+            style={{
+              background: "linear-gradient(to right, #7c5aff, #5cb8e6)",
+              border: "none",
+            }}
+          >
+            Process Image
+          </Button>
+        </div>
+      </Card>
+
+      {/* Row 3: Results */}
+      {processedImages ? (
+        <div
+          className="p-6 rounded-xl shadow-card animate-fade-in"
+          style={{
+            background: "white",
+          }}
+        >
+          <Title level={2} className="text-center mb-8 gradient-text">
+            Generated Results
+          </Title>
+          <Row gutter={[24, 24]}>
+            <Col xs={24} md={12}>
+              <Card
+                className="shadow-card border-gray-100"
+                title="Original Image"
+              >
+                <DisplayImage imageUrl={processedImages.original} />
+              </Card>
+            </Col>
+            <Col xs={24} md={12}>
+              <Card
+                className="shadow-card border-gray-100"
+                title="Enhanced Image"
+              >
+                <DisplayImage imageUrl={processedImages.enhanced} />
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      ) : null}
+
+      <Image
+        style={{ display: "none" }}
+        preview={{
+          visible: previewOpen,
+          onVisibleChange: (visible) => setPreviewOpen(visible),
+          afterOpenChange: (visible) => !visible && setPreviewImage(null),
+        }}
+        src={previewImage ?? undefined}
+      />
+      <div ref={resultsRef} />
+    </div>
+  );
+};
+
+export default SuperResolution;

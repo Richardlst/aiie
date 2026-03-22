@@ -1,0 +1,8 @@
+# typical gitignore for web apps
+node_modules
+dist
+.DS_Store
+ui.log
+.env
+.env.*
+*.tsbuildinfo

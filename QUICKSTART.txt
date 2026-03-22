@@ -1,0 +1,85 @@
+╔══════════════════════════════════════════════════════════════╗
+║                  AIIE - QUICK START GUIDE                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+🎯 3 BƯỚC ĐỂ CHẠY DỰ ÁN:
+
+┌──────────────────────────────────────────────────────────────┐
+│ BƯỚC 1: CẤU HÌNH OPENAI API KEY (BẮT BUỘC)                  │
+└──────────────────────────────────────────────────────────────┘
+
+1. Lấy API key tại: https://platform.openai.com/api-keys
+2. Mở file: aiie-agent-api\.env
+3. Thay dòng:
+   OPENAI_API_KEY=sk-your-openai-api-key-here
+   
+   Thành:
+   OPENAI_API_KEY=sk-proj-abc123xyz... (key thật của bạn)
+
+┌──────────────────────────────────────────────────────────────┐
+│ BƯỚC 2: KHỞI ĐỘNG TẤT CẢ SERVICES                           │
+└──────────────────────────────────────────────────────────────┘
+
+Mở PowerShell tại thư mục này và chạy:
+
+    .\start-all.ps1
+
+Script sẽ tự động:
+- ✅ Khởi động PostgreSQL (Docker)
+- ✅ Khởi động MinIO (Docker)
+- ✅ Khởi động Agent API (port 8000)
+- ✅ Khởi động SD API (port 8001)
+- ✅ Khởi động SRGAN API (port 8002)
+- ✅ Khởi động Frontend (port 5173)
+
+┌──────────────────────────────────────────────────────────────┐
+│ BƯỚC 3: TẠO BUCKET TRONG MINIO (CHỈ LẦN ĐẦU)                │
+└──────────────────────────────────────────────────────────────┘
+
+1. Truy cập: http://localhost:9001
+2. Đăng nhập:
+   - Username: minioadmin
+   - Password: minioadmin
+3. Click "Create Bucket"
+4. Tên bucket: aiie-storage
+5. Click "Create"
+6. Vào bucket vừa tạo → Access Policy → chọn "Public"
+
+╔══════════════════════════════════════════════════════════════╗
+║                    🎉 HOÀN TẤT!                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+Truy cập ứng dụng tại: http://localhost:5173
+
+───────────────────────────────────────────────────────────────
+
+📚 CÁC LINK HỮU ÍCH:
+
+Frontend:       http://localhost:5173
+Agent API:      http://localhost:8000/docs
+SD API:         http://localhost:8001/docs
+SRGAN API:      http://localhost:8002/docs
+MinIO Console:  http://localhost:9001
+
+───────────────────────────────────────────────────────────────
+
+🛑 ĐỂ DỪNG TẤT CẢ SERVICES:
+
+    .\stop-all.ps1
+
+───────────────────────────────────────────────────────────────
+
+⚠️  LƯU Ý:
+
+• Lần đầu chạy SD API sẽ tải model (~4GB), mất 10-30 phút
+• Cần ít nhất 8GB RAM (16GB khuyến nghị)
+• Cần kết nối internet để tải models
+• Docker Desktop phải đang chạy
+
+───────────────────────────────────────────────────────────────
+
+❓ GẶP VẤN ĐỀ?
+
+Xem file README.md hoặc CHECKLIST.md để biết thêm chi tiết.
+
+───────────────────────────────────────────────────────────────
