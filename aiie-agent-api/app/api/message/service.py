@@ -83,8 +83,27 @@ class MessageService:
                 input=ConversationUpdate(name=con_name),
             )
 
+        # --- ĐOẠN CODE ĐƯỢC CHỈNH SỬA Ở ĐÂY ---
+        # Lấy nội dung thô từ tin nhắn cuối cùng (của Assistant)
+        raw_content = state["messages"][-1].content
+        
+        # Xử lý: Đảm bảo content luôn là một chuỗi String hợp lệ
+        res_content = ""
+        if isinstance(raw_content, str):
+            res_content = raw_content
+        elif isinstance(raw_content, list):
+            # Nếu Gemini trả về dạng list chứa các khối dict
+            for item in raw_content:
+                if isinstance(item, dict) and "text" in item:
+                    res_content += item["text"]
+                elif isinstance(item, str):
+                    res_content += item
+        else:
+            # Fallback nếu là một định dạng khác
+            res_content = str(raw_content)
+        # -------------------------------------
+
         # Create message
-        res_content = state["messages"][-1].content
         messages = await self.__create_multiple(
             [
                 MessageCreate(
@@ -93,7 +112,7 @@ class MessageService:
                     conversation_id=conversation.id,
                 ),
                 MessageCreate(
-                    content=res_content,
+                    content=res_content, # Truyền chuỗi đã xử lý vào đây
                     role=MessageRole.ASSISTANT,
                     conversation_id=conversation.id,
                 ),

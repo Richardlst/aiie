@@ -4,22 +4,17 @@ from app.api.image.schemas.sr import SrRequest
 from app.core.settings import settings
 from app.api.image.schemas.common import GenerationResponse
 
-
 @tool(args_schema=SrRequest)
-async def super_resulution(**kwargs) -> str:
+async def gfpgan(**kwargs) -> str:
     """
-    Upscale and sharpen the entire image.
-    NOTE: DO NOT use this tool for sharpening human faces (please use gfpgan instead).
+        SPECIALIZED tool for restoring and sharpening HUMAN FACES.
+        Call this tool when the user requests 'sharpen face', 'restore portrait', or 'fix face'.
     """
-    # Convert kwargs into a SegmentRequest object   
     request = SrRequest(**kwargs)
-
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"{settings.SRGAN_API_URL}/sr",
-            json={
-                "image_url": request.image_url,
-            },
+            f"{settings.SD_API_URL}/gfpgan", 
+            json={"image_url": request.image_url},
         ) as response:
             response_data = await response.json()
 

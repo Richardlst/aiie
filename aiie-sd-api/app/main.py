@@ -92,7 +92,7 @@ async def colorize_image(request: ColorizeRequest, service: ColorizeServiceDep):
         raise
 
 
-@app.post("/face-refine", response_model=GenerationResponse)
+@app.post("/gfpgan", response_model=GenerationResponse)
 async def face_refine_image(request: FaceRefineRequest, service: FaceRefineServiceDep):
     try:
         logger.info(

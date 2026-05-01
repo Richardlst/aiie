@@ -8,11 +8,16 @@ from app.agent.nodes.chat_node import ChatNode
 from app.agent.nodes.title_generate_node import TitleGenerateNode
 from app.core.settings import settings
 from app.ws.conversation.dependencies import ConnectionManagerDep
-
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama 
+import os
 
 def get_chat_model():
-    return ChatOpenAI(
-        model=settings.OPENAI_MODEL
+    # Sử dụng llama3.1 để có khả năng gọi Tool (gfpgan, super_resolution...)
+    return ChatOllama(
+        model="llama3.1", 
+        temperature=0,      # Để 0 để AI chọn tool chính xác hơn, ít "sáng tạo" linh tinh
+        base_url="http://localhost:11434"
     )
 
 
