@@ -15,7 +15,9 @@ from app.ws.conversation.schemas import (
 )
 
 from .base_node import BaseNode
-
+import json
+import re
+from langchain_core.messages import AIMessage
 logger = setup_logger("ChatNode")
 
 
@@ -54,6 +56,27 @@ class ChatNode(BaseNode):
             )
             logger.info("LLM called")
             response = await self.chat_model.ainvoke(state["messages"])
+            
+            # --- ĐOẠN XỬ LÝ FIX LỖI OLLAMA ---
+            # Nếu model không trả về tool_calls chuẩn, nhưng trong text có chứa cấu trúc JSON gọi hàm
+            if not response.tool_calls and response.content and "{" in response.content and "name" in response.content:
+                try:
+                    # Dùng Regex để tìm đoạn JSON trong chuỗi text
+                    json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
+                    if json_match:
+                        tool_data = json.loads(json_match.group(0))
+                        if "name" in tool_data and tool_data["name"] in [t.name for t in tools]:
+                            logger.info("Manually parsed tool call from Ollama output")
+                            # Ép kiểu thủ công để LangGraph hiểu
+                            response.tool_calls = [{
+                                "name": tool_data["name"],
+                                "args": tool_data.get("parameters", {}),
+                                "id": "call_" + str(uuid.uuid4())[:8] # Tạo ID giả cho tool call
+                            }]
+                except Exception as e:
+                    logger.error(f"Failed to parse manual tool call: {e}")
+            # ---------------------------------
+
             if response.tool_calls:
                 logger.info(
                     f"Tool {[tool['name'] for tool in response.tool_calls]} called"
