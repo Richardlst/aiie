@@ -1,5 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import socket
+import sys
+
+# Windows socket buffer fix - increase buffer sizes
+if sys.platform == "win32":
+    try:
+        # Increase TCP socket buffer sizes for Windows
+        socket.socket.SO_SNDBUF = 8 * 1024 * 1024  # 8MB
+        socket.socket.SO_RCVBUF = 8 * 1024 * 1024  # 8MB
+        import os
+        os.environ["HF_DATASETS_TRUST_REMOTE_CODE"] = "1"
+    except Exception as e:
+        pass
 
 from app.dependencies import (
     ExpandServiceDep,
@@ -87,6 +101,9 @@ async def colorize_image(request: ColorizeRequest, service: ColorizeServiceDep):
         url = await service.run(request)
         logger.info(f"Colorize success: {url}")
         return GenerationResponse(image_url=url)
+    except asyncio.CancelledError:
+        logger.error(f"Colorize cancelled (socket timeout/network issue) - retrying may help")
+        raise
     except Exception as e:
         logger.error(f"Colorize error: {str(e)}", exc_info=True)
         raise

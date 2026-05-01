@@ -3,10 +3,17 @@ import concurrent.futures
 import gc
 import os
 import re
+import sys
+import time
 from typing import Any, Tuple
 
 import PIL.Image
 import numpy as np
+
+# Configure HuggingFace Hub for better download performance
+os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = "300"  # 5 minutes per chunk
+os.environ["HF_HUB_ETAG_TIMEOUT"] = "60"  # 1 minute for metadata
+os.environ["HF_HUB_CHUNK_TIMEOUT"] = "60"  # 1 minute per chunk
 
 _EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="colorize")
 
@@ -88,6 +95,35 @@ _MANUAL_WORDS = [
 _UNLIKELY_WORDS.extend(_a1 + _a2 + _a3 + _a4 + _b1 + _b2 + _b3 + _b4 + _MANUAL_WORDS)
 
 # ---------------------------------------------------------------------------
+# Download helpers with retry logic for Windows
+# ---------------------------------------------------------------------------
+
+def _download_with_retry(download_fn, max_retries=3, backoff_factor=2):
+    """Retry download with exponential backoff for socket errors."""
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Download attempt {attempt + 1}/{max_retries}")
+            result = download_fn()
+            logger.info(f"Download succeeded on attempt {attempt + 1}")
+            return result
+        except OSError as e:
+            if "10055" in str(e) or "buffer" in str(e).lower():  # Socket buffer error
+                if attempt < max_retries - 1:
+                    wait_time = backoff_factor ** attempt
+                    logger.warning(f"Socket buffer error, retrying in {wait_time}s: {e}")
+                    time.sleep(wait_time)
+                    continue
+            raise
+        except Exception as e:
+            if attempt < max_retries - 1 and ("timeout" in str(e).lower() or "connection" in str(e).lower()):
+                wait_time = backoff_factor ** attempt
+                logger.warning(f"Connection error, retrying in {wait_time}s: {e}")
+                time.sleep(wait_time)
+                continue
+            raise
+    raise RuntimeError(f"Download failed after {max_retries} attempts")
+
+# ---------------------------------------------------------------------------
 # Module-level cache
 # ---------------------------------------------------------------------------
 _pipe = None
@@ -125,7 +161,9 @@ def _get_or_load_pipeline():
         torch.backends.cudnn.benchmark = True
 
     logger.info(f"Ensuring ControlNet snapshot ({CONTROLNET_REPO})...")
-    snapshot_download(repo_id=CONTROLNET_REPO, local_dir=CONTROLNET_LOCAL_DIR)
+    _download_with_retry(
+        lambda: snapshot_download(repo_id=CONTROLNET_REPO, local_dir=CONTROLNET_LOCAL_DIR)
+    )
 
     logger.info("Loading VAE...")
     vae = AutoencoderKL.from_pretrained(
@@ -135,9 +173,12 @@ def _get_or_load_pipeline():
     logger.info("Loading UNet from SDXL-Lightning...")
     unet_config = UNet2DConditionModel.load_config(BASE_MODEL_ID, subfolder="unet")
     unet = UNet2DConditionModel.from_config(unet_config)
-    unet.load_state_dict(
-        load_file(hf_hub_download(LIGHTNING_REPO, LIGHTNING_FILE))
+    
+    # Download Lightning model with retry
+    lightning_file_path = _download_with_retry(
+        lambda: hf_hub_download(LIGHTNING_REPO, LIGHTNING_FILE)
     )
+    unet.load_state_dict(load_file(lightning_file_path))
     unet = unet.to(dtype=weight_dtype)
 
     logger.info("Loading ControlNet...")
@@ -300,12 +341,20 @@ class ColorizeService(BaseSDService):
         self._debug_image(control_preview, "control_image")
 
         loop = asyncio.get_event_loop()
-        colorized = await loop.run_in_executor(
-            _EXECUTOR,
-            _sync_colorize,
-            input,
-            image,
-        )
+        try:
+            # Run colorization with timeout to prevent socket buffer hangs
+            colorized = await asyncio.wait_for(
+                loop.run_in_executor(
+                    _EXECUTOR,
+                    _sync_colorize,
+                    input,
+                    image,
+                ),
+                timeout=600  # 10 minutes timeout
+            )
+        except asyncio.TimeoutError:
+            logger.error("Colorization timed out (socket buffer issue)")
+            raise RuntimeError("Colorization process timed out. Try again or reduce image size.")
 
         self._debug_image(colorized, "colorized")
         return await self.save_image(colorized)
