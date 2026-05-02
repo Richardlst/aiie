@@ -4,21 +4,18 @@ from app.core.settings import settings
 from app.api.image.schemas.common import GenerationResponse
 from app.utils.http_client import post_json
 
-
 @tool(args_schema=SrRequest)
-async def super_resulution(**kwargs) -> str:
+async def gfpgan(**kwargs) -> str:
     """
-    Upscale and sharpen the entire image.
-    NOTE: DO NOT use this tool for sharpening human faces (please use gfpgan instead).
+        SPECIALIZED tool for restoring and sharpening HUMAN FACES.
+        Call this tool when the user requests 'sharpen face', 'restore portrait', or 'fix face'.
     """
-    # Convert kwargs into a SrRequest object   
     request = SrRequest(**kwargs)
-
     response_data = await post_json(
-        f"{settings.SRGAN_API_URL}/sr",
+        f"{settings.SD_API_URL}/gfpgan",
         {"image_url": request.image_url},
         max_retries=5,
     )
-    
+
     response_data = GenerationResponse(**response_data)
     return response_data.image_url

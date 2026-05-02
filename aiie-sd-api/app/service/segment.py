@@ -4,8 +4,11 @@ import numpy as np
 import cv2
 from PIL import Image
 import torch
-from transformers import CLIPSegProcessor, CLIPSegForImageSegmentation
 import requests
+import os
+
+from transformers import GroundingDinoForObjectDetection, GroundingDinoProcessor
+from segment_anything import sam_model_registry, SamPredictor
 
 from app.service.storage import StorageService
 from app.settings import settings
@@ -16,151 +19,123 @@ from app.utils import get_unique_filename
 logger = setup_logger("SegmentationService")
 device = settings.DEVICE
 
-
 class SegmentationService:
     def __init__(self, storage_service: StorageService):
         self.storage_service = storage_service
         self._init_models()
-        self._init_face_detector()
-        self._init_prompts()
 
     def _init_models(self):
-        self.processor = CLIPSegProcessor.from_pretrained("CIDAS/clipseg-rd64-refined")
-        self.model = CLIPSegForImageSegmentation.from_pretrained(
-            "CIDAS/clipseg-rd64-refined"
-        )
-        self.model.to(device)
-        self.model.eval()
-
-    def _init_face_detector(self):
-        """Initialize OpenCV Haar cascade for face detection."""
-        self.face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        )
-
-    def _init_prompts(self):
-        self.part_prompts = {
-            "eyes": ["human eyes", "a pair of eyes", "open eyes"],
-            "nose": ["human nose", "nose on face"],
-            "lips": ["human lips", "mouth lips"],
-            "face": ["human face", "face"],
-            "head": ["human head", "head"],
-            "hair": ["human hair", "hair"],
-            "arm": ["human arm", "arm"],
-            "leg": ["human leg", "leg"],
-            "hand": ["human hand", "hand"],
-            "foot": ["human foot", "foot"],
-            "ear": ["human ear", "ear"],
-            "neck": ["human neck", "neck"],
-            "chest": ["human chest", "chest"],
-            "body": ["human body", "body"],
-            "back": ["human back", "back"],
-            "waist": ["human waist", "waist"],
-            "hips": ["human hips", "hips"],
-            "thigh": ["human thigh", "thigh"],
-            "knee": ["human knee", "knee"],
-            "calf": ["human calf", "calf"],
-        }
-
-    def _get_region_bbox(self, image):
-        """Detect face region using OpenCV Haar cascade."""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        faces = self.face_cascade.detectMultiScale(
-            gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
-        )
-        if len(faces) == 0:
-            return None
-
-        h, w = image.shape[:2]
-        x, y, fw, fh = faces[0]
-        padding = 0.1
-        x_min = max(0, int(x - padding * fw))
-        y_min = max(0, int(y - padding * fh))
-        x_max = min(w, int(x + fw + padding * fw))
-        y_max = min(h, int(y + fh + padding * fh))
-
-        if x_max <= x_min or y_max <= y_min:
-            return None
-
-        return (x_min, y_min, x_max, y_max)
-
-    def _process_image(self, image: np.ndarray, prompts: list) -> np.ndarray:
-        pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        prompt = prompts[0] if isinstance(prompts, list) else prompts
-
-        inputs = self.processor(images=pil_image, text=prompt, return_tensors="pt")
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits
-
-        masks = torch.sigmoid(logits).detach().cpu().numpy()
-        combined_mask = np.max(masks, axis=0)
-
-        return combined_mask
-
-    def _segment_region(self, image: np.ndarray, prompt: str):
-        bbox = self._get_region_bbox(image)
-        if bbox is None:
-            mask = self._process_image(image, [prompt])
-            mask = cv2.resize(mask, (image.shape[1], image.shape[0]))
-            return mask
-
-        x_min, y_min, x_max, y_max = bbox
-        region_image = image[y_min:y_max, x_min:x_max]
-        region_mask = self._process_image(region_image, [prompt])
-
-        full_mask = np.zeros((image.shape[0], image.shape[1]))
-        region_mask_resized = cv2.resize(region_mask, (x_max - x_min, y_max - y_min))
-        full_mask[y_min:y_max, x_min:x_max] = region_mask_resized
-
-        return full_mask
+        logger.info("Đang khởi tạo Pipeline Grounded-SAM (Manual Edition)...")
+        try:
+            # 1. Khởi tạo GroundingDINO Tiny (Text-to-Box)
+            repo_id = "IDEA-Research/grounding-dino-tiny"
+            self.gdino_processor = GroundingDinoProcessor.from_pretrained(repo_id)
+            self.gdino_model = GroundingDinoForObjectDetection.from_pretrained(repo_id).to(device)
+            
+            # 2. Khởi tạo SAM (Box-to-Mask)
+            # Tải file sam_vit_b_01ec64.pth về thư mục gốc nếu chưa có
+            sam_type = "vit_b" 
+            checkpoint_path = "models/sam_vit_b_01ec64.pth"
+            
+            if not os.path.exists(checkpoint_path):
+                logger.warning(f"CẢNH BÁO: Không tìm thấy file {checkpoint_path}. Model SAM sẽ chạy không chính xác.")
+                self.sam = sam_model_registry[sam_type](checkpoint=None)
+            else:
+                self.sam = sam_model_registry[sam_type](checkpoint=checkpoint_path)
+                
+            self.sam.to(device)
+            self.sam_predictor = SamPredictor(self.sam)
+            
+            logger.info("Khởi tạo Pipeline thành công!")
+        except Exception as e:
+            logger.error(f"Lỗi khởi tạo model: {str(e)}")
+            raise
 
     async def _load_image(self, image_url: str) -> np.ndarray:
         response = requests.get(image_url)
-        image_data = response.content
-        nparr = np.frombuffer(image_data, np.uint8)
+        nparr = np.frombuffer(response.content, np.uint8)
         return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
+    def _get_boxes(self, image_pil, prompt):
+        # Đảm bảo prompt kết thúc bằng dấu chấm
+        p = prompt.strip()
+        if not p.endswith("."):
+            p += "."
+            
+        inputs = self.gdino_processor(images=image_pil, text=p, return_tensors="pt").to(device)
+        with torch.no_grad():
+            outputs = self.gdino_model(**inputs)
+        
+        # Hạ ngưỡng threshold xuống 0.2 để nhạy hơn, tránh việc không tìm thấy box (gây trắng ảnh)
+        results = self.gdino_processor.post_process_grounded_object_detection(
+            outputs,
+            inputs.input_ids,
+            threshold=0.2, 
+            text_threshold=0.2,
+            target_sizes=[image_pil.size[::-1]]
+        )[0]
+        
+        return results["boxes"]
+
+    def _process_image(self, image_np, prompt: str) -> np.ndarray:
+        image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
+        image_pil = Image.fromarray(image_rgb)
+        
+        # 1. Lấy boxes từ GroundingDINO
+        boxes = self._get_boxes(image_pil, prompt)
+        logger.info(f"Prompt: '{prompt}' - Tìm thấy {len(boxes)} đối tượng.")
+        
+        if len(boxes) == 0:
+            return np.zeros((image_np.shape[0], image_np.shape[1]), dtype=bool)
+
+        # 2. Dùng SAM để cắt mask
+        self.sam_predictor.set_image(image_rgb)
+        
+        # Áp dụng dự đoán mask cho tất cả các box tìm thấy
+        transformed_boxes = self.sam_predictor.transform.apply_boxes_torch(boxes, image_np.shape[:2])
+        
+        with torch.no_grad():
+            masks, _, _ = self.sam_predictor.predict_torch(
+                point_coords=None,
+                point_labels=None,
+                boxes=transformed_boxes,
+                multimask_output=False,
+            )
+        
+        # LOGIC QUAN TRỌNG: Gộp tất cả mask lại thành một mảng 2D duy nhất
+        # masks có shape [N, 1, H, W], cần gộp N và xóa chiều 1
+        combined_mask = torch.any(masks.squeeze(1), dim=0).cpu().numpy()
+        return combined_mask
+
     async def _save_result(self, result_image: Image.Image) -> str:
-        # Chuyển đổi Image.Image thành BytesIO
         img_byte_arr = BytesIO()
         result_image.save(img_byte_arr, format="PNG")
         img_byte_arr.seek(0)
-
-        # Tạo UploadFile từ BytesIO
+        
         upload_file = UploadFile(filename=get_unique_filename(), file=img_byte_arr)
-
-        # Gọi phương thức upload_image
         response = await self.storage_service.upload_image(upload_file)
-
-        # Log thông tin
-        logger.info(f"Đã lưu ảnh thành công: {response.data.url}")
-        logger.info(f"Kích thước ảnh: {result_image.size}")
-
         return response.data.url
 
     async def run(self, data: SegmentRequest) -> str:
         try:
-            image = await self._load_image(data.image_url)
-            prompt_list = [p.strip() for p in data.prompts.split(",")]
+            image_cv2 = await self._load_image(data.image_url)
+            h, w = image_cv2.shape[:2]
+            
+            prompt_list = [p.strip() for p in data.prompts.split(",") if p.strip()]
+            final_mask = np.zeros((h, w), dtype=bool)
 
-            combined_mask = np.zeros((image.shape[0], image.shape[1]))
             for prompt in prompt_list:
-                mask = self._segment_region(image, prompt)
-                combined_mask = np.maximum(combined_mask, mask)
+                mask = self._process_image(image_cv2, prompt)
+                # Gộp mask của các prompt khác nhau bằng phép OR
+                final_mask = np.logical_or(final_mask, mask)
 
-            # Convert original BGR image to RGBA
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            result = np.zeros((image.shape[0], image.shape[1], 4), dtype=np.uint8)
-            result[:, :, :3] = image_rgb
-            # Alpha channel: 255 where mask > threshold, 0 (transparent) elsewhere
-            result[:, :, 3] = (combined_mask > 0.08).astype(np.uint8) * 255
-            result_pil = Image.fromarray(result, mode="RGBA")
+            # Tạo kết quả RGBA (Trong suốt vùng không có mask)
+            result = np.zeros((h, w, 4), dtype=np.uint8)
+            result[:, :, :3] = cv2.cvtColor(image_cv2, cv2.COLOR_BGR2RGB)
+            result[:, :, 3] = final_mask.astype(np.uint8) * 255
 
-            return await self._save_result(result_pil)
-
+            return await self._save_result(Image.fromarray(result, mode="RGBA"))
+            
         except Exception as e:
-            logger.error(f"Error in segmentation: {str(e)}")
+            logger.error(f"Segmentation Error: {str(e)}")
             raise

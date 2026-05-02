@@ -1,5 +1,31 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import socket
+import sys
+import os
+import torch
+
+# Windows socket buffer fix - increase buffer sizes
+if sys.platform == "win32":
+    try:
+        # Increase TCP socket buffer sizes for Windows
+        socket.socket.SO_SNDBUF = 8 * 1024 * 1024  # 8MB
+        socket.socket.SO_RCVBUF = 8 * 1024 * 1024  # 8MB
+        os.environ["HF_DATASETS_TRUST_REMOTE_CODE"] = "1"
+        # Increase Windows page file (virtual memory) to prevent paging errors
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
+    except Exception as e:
+        pass
+
+# Configure PyTorch threading ONCE at startup (before models load)
+# This must be done before any parallel work starts
+_num_threads = max(1, (os.cpu_count() or 4) // 2)
+torch.set_num_threads(_num_threads)
+try:
+    torch.set_num_interop_threads(max(1, _num_threads // 2))
+except RuntimeError:
+    pass  # Already set or parallel work started
 
 from app.dependencies import (
     ExpandServiceDep,
@@ -87,12 +113,15 @@ async def colorize_image(request: ColorizeRequest, service: ColorizeServiceDep):
         url = await service.run(request)
         logger.info(f"Colorize success: {url}")
         return GenerationResponse(image_url=url)
+    except asyncio.CancelledError:
+        logger.error(f"Colorize cancelled (socket timeout/network issue) - retrying may help")
+        raise
     except Exception as e:
         logger.error(f"Colorize error: {str(e)}", exc_info=True)
         raise
 
 
-@app.post("/face-refine", response_model=GenerationResponse)
+@app.post("/gfpgan", response_model=GenerationResponse)
 async def face_refine_image(request: FaceRefineRequest, service: FaceRefineServiceDep):
     try:
         logger.info(

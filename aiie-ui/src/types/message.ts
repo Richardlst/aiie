@@ -6,6 +6,7 @@ export interface AddMessageRequest {
     content: string;
     conversation_id: string;
     files?: string[];
+    image_url?: string;
 }
 
 export interface MessageResponse {

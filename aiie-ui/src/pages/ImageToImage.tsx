@@ -28,12 +28,12 @@ const { Title, Paragraph } = Typography;
 const initialValues: Omit<Img2ImgRequest, "image_url"> = {
   model: "runwayml/stable-diffusion-v1-5",
   prompt:
-    "same gender as input image, well-defined lips, symmetrical face, perfectly aligned eyes, forward facing eyes, focused gaze, proper eye alignment, even eyes, happy, smile, white skin, detailed features, intricate details, vibrant colors, good face shape, professional portrait, high quality rendering",
+    "(subject_gender:1.4), (subject_age:1.2), (clothing_description:1.2), looking at camera, (anime style:1.2), (flat color:1.1), simple background, lineart, masterpiece, high quality, 2d",
   negative_prompt:
-    "gender change, asymmetrical lips, deformed mouth, asymmetrical eyes, uneven eyes, uneven pupils, distorted eyes, blurry eyes, different sized eyes, naked, low quality, blurry, distorted, deformed, disfigured, asymmetrical face, bad anatomy, ugly, out of frame, bad proportions, bad hands, missing limbs, extra limbs, disconnected limbs, duplicate, bad lighting",
+    "(woman:1.5), (girl:1.5), female, feminine, (long hair:1.3), makeup, lipstick, earrings, jewelry, fashion, (breast:1.2), realistic, photorealistic, 3d, render, lowres, bad anatomy, bad proportions, blurry, distorted face, messy lines, gender change, asymmetrical lips, deformed mouth, asymmetrical eyes, uneven eyes, uneven pupils, distorted eyes, blurry eyes, different sized eyes, naked, low quality, blurry, distorted, deformed, disfigured, asymmetrical face, bad anatomy, ugly, out of frame, bad proportions, bad hands, missing limbs, extra limbs, disconnected limbs, duplicate, bad lighting",
   num_inference_steps: 50,
   guidance_scale: 9.5,
-  strength: 0.85,
+  strength: 0.60,
   canny_low_threshold: 120,
   canny_high_threshold: 150,
   controlnet_conditioning_scale: 0.55,

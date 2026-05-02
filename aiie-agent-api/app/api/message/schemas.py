@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 import uuid
 from datetime import datetime
 
@@ -20,6 +20,7 @@ class MessageResponse(MessageBase):
 class AddMessageRequest(BaseModel):
     content: str
     conversation_id: uuid.UUID
+    files: Optional[List[str]] = None
 
 
 class AddMessageResponse(BaseModel):
