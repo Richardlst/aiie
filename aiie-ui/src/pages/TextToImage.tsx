@@ -20,14 +20,16 @@ import { Text2ImgRequest } from "../types/image";
 
 const { Title, Paragraph } = Typography;
 
+// 🟢 Cấu hình mặc định tối ưu cho dòng mô hình Hyper
 const initialValues: Text2ImgRequest = {
-  model: "runwayml/stable-diffusion-v1-5",
+  // Đổi trả lại tên model cũ để không bị FastAPI chặn (Lỗi 422)
+  model: "runwayml/stable-diffusion-v1-5", 
   prompt:
-    "Enchanted forest at twilight, magical glowing mushrooms, ancient twisted trees with faces, ethereal mist, small fairies with luminescent wings, moonlight filtering through leaves, detailed foliage, fantasy atmosphere, mystical, dreamy, photorealistic, cinematic lighting, 8k resolution, highly detailed, intricate, sharp focus, dramatic lighting, volumetric light, depth of field, concept art",
+    "RAW photo, close-up portrait of a gorgeous Vietnamese young woman, wearing elegant white Ao Dai, soft smile, standing in a lush green garden, highly detailed skin, visible skin pores, natural makeup, soft natural lighting, dappled sunlight, shot on Sony A7R IV, 85mm lens, f/1.8, blurred background, bokeh, photorealistic, 8k resolution, masterpiece, extremely detailed",
   negative_prompt:
-    "ugly, deformed, disfigured, poor anatomy, bad proportions, extra limbs, missing limbs, poorly drawn face, mutation, mutated, blurry, watermark, text, signature, cut off, low quality, low resolution, bad art, jpeg artifacts, pixelated, out of frame, cropped, draft, amateur, badly drawn, distorted proportions",
-  num_inference_steps: 20,
-  guidance_scale: 7.5,
+    "(deformed iris, deformed pupils:1.4), (worst quality, low quality:1.4), CGI, 3D, illustration, cartoon, ugly, duplicate, morbid, mutilated, extra fingers, mutated hands, poorly drawn hands, poorly drawn face, mutation, deformed, blurry, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, text, watermark, ugly, deformed, blurry, low quality, watermark, text, cartoon, anime, sketch, painting, drawing, bad anatomy",
+  num_inference_steps: 6,  // Mặc định 6 bước cho Hyper
+  guidance_scale: 1.5,     // Mặc định 1.5 cho Hyper
   width: 512,
   height: 512,
 };
@@ -42,17 +44,23 @@ const TextToImage = () => {
   const handleGenerate = async (values: Text2ImgRequest) => {
     setLoading(true);
     try {
+      // Gọi API đến Backend
       const response = await textToImageApi(values);
-      const data = response;
-      setGeneratedImage(data.image_url);
+      
+      // Cập nhật URL ảnh từ kết quả trả về
+      setGeneratedImage(response.image_url);
 
-      // Scroll to results after image is set
+      // Cuộn xuống phần kết quả sau khi ảnh đã load
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
-    } catch (error) {
+      
+      messageApi.success("Image generated successfully!");
+    } catch (error: any) {
       console.error("Error generating image:", error);
-      messageApi.error("Error generating image");
+      // Hiển thị chi tiết lỗi từ Server nếu có (ví dụ: lỗi Tensor 9 vs 4)
+      const errorDetail = error.response?.data?.detail || "Error generating image";
+      messageApi.error(errorDetail);
     } finally {
       setLoading(false);
     }
@@ -74,9 +82,7 @@ const TextToImage = () => {
             Text to Image Generation
           </Title>
           <Paragraph className="text-lg mt-4 mb-8 max-w-3xl mx-auto text-white/90">
-            Transform your creative ideas into stunning visuals using our
-            advanced AI image generation system. Simply describe what you want
-            to see, and watch as our AI brings your vision to life.
+            Experience lightning-fast image creation powered by the Hyper model. Just describe your concept, and watch AI turn your vision into reality in seconds.
           </Paragraph>
         </div>
       </div>
@@ -87,280 +93,153 @@ const TextToImage = () => {
         layout="vertical"
         initialValues={initialValues}
       >
-        {/* Main Content Row */}
-        <Row gutter={[24, 24]} className="">
-          {/* How It Works Column */}
-          <Col xs={24} lg={9}>
-            <Card className="shadow-card border-gray-100">
-              <Title level={4} className="mb-4">
-                How It Works
-              </Title>
+        <Row gutter={[24, 24]}>
+          {/* Cột hướng dẫn bên trái */}
+         <Col xs={24} lg={9}>
+  <Card className="shadow-card border-gray-100 h-full">
+    <Title level={4} className="mb-4">Tips & Guidelines</Title>
+    
+    <div className="space-y-6">
+      {/* New: How to Use Section */}
+      <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
+        <p className="font-medium text-emerald-800 mb-2"> How to Use</p>
+        <ul className="space-y-2 text-sm text-emerald-700">
+          <li><strong>1. Upload:</strong> Select your grayscale or black-and-white image.</li>
+          <li><strong>2. Describe:</strong> Add a prompt to guide the AI's colors (optional).</li>
+          <li><strong>3. Generate:</strong> Click the colorize button and wait for the magic!</li>
+        </ul>
+      </div>
 
-              <div className="space-y-6">
-                <ul className="space-y-4">
-                  <li className="flex items-start gap-3">
-                    <div
-                      className="p-2 rounded-lg shrink-0"
-                      style={{ backgroundColor: "#7c5aff15" }}
-                    >
-                      <Wand2 className="w-4 h-4" style={{ color: "#7c5aff" }} />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-800">
-                        Describe Your Vision
-                      </p>
-                      <p className="text-gray-600 text-sm">
-                        Enter a detailed description of the image you want to
-                        create
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <div
-                      className="p-2 rounded-lg shrink-0"
-                      style={{ backgroundColor: "#5cb8e615" }}
-                    >
-                      <Settings
-                        className="w-4 h-4"
-                        style={{ color: "#5cb8e6" }}
-                      />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-800">
-                        Adjust Settings
-                      </p>
-                      <p className="text-gray-600 text-sm">
-                        Fine-tune parameters to control the generation process
-                      </p>
-                    </div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <div
-                      className="p-2 rounded-lg shrink-0"
-                      style={{ backgroundColor: "#7c5aff15" }}
-                    >
-                      <ImageIcon
-                        className="w-4 h-4"
-                        style={{ color: "#7c5aff" }}
-                      />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-800">
-                        Generate & Review
-                      </p>
-                      <p className="text-gray-600 text-sm">
-                        AI generates your image based on your inputs
-                      </p>
-                    </div>
-                  </li>
-                </ul>
+      {/*  Translated: Hyper Mode Section */}
+      <div className="bg-purple-50 rounded-lg p-4 border border-purple-100">
+        <p className="font-medium text-purple-800 mb-2"> Hyper Mode Active</p>
+        <ul className="space-y-2 text-sm text-purple-700">
+          <li>• Keep Steps between 6 and 10 for the best results.</li>
+          <li>• Guidance Scale should be kept low (1.5 - 2.5).</li>
+          <li>• The more detailed the prompt, the sharper the result.</li>
+        </ul>
+      </div>
 
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <p className="font-medium text-gray-800 mb-2">Tips</p>
-                  <ul className="space-y-2 text-sm text-gray-600">
-                    <li className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-purple-400"></div>
-                      <span>Be specific and detailed in descriptions</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-blue-400"></div>
-                      <span>Use artistic terms for style control</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1 h-1 rounded-full bg-pink-400"></div>
-                      <span>Higher steps = better quality</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </Card>
-          </Col>
+      {/*  Translated: Standard Size Section */}
+      <div className="bg-blue-50 rounded-lg p-4 border border-blue-100 text-sm">
+        <p className="font-medium text-blue-800 mb-2">Recommended Size</p>
+        <p className="text-blue-700">
+          The model performs best and remains most stable at 512x512 or 512x768 resolutions.
+        </p>
+      </div>
+      
+    </div>
+  </Card>
+</Col>
 
-          {/* Form Column */}
+          {/* Cột Form điều khiển bên phải */}
           <Col xs={24} lg={15}>
             <Card className="shadow-md border-gray-100 mb-8">
-              <Row gutter={[24, 24]}>
-                <Col xs={24}>
-                  <Form.Item
-                    name="model"
-                    label="Model"
-                    rules={[
-                      { required: true, message: "Please select a model!" },
-                    ]}
-                  >
-                    <Select options={MODEL_OPTIONS} />
-                  </Form.Item>
+              <Form.Item
+                name="model"
+                label="Model Selection"
+                rules={[{ required: true }]}
+              >
+                <Select options={MODEL_OPTIONS} placeholder="Chọn mô hình..." />
+              </Form.Item>
 
-                  <Form.Item
-                    name="prompt"
-                    label="Prompt"
-                    rules={[
-                      { required: true, message: "Please input your prompt!" },
-                    ]}
-                  >
-                    <Input.TextArea
-                      rows={4}
-                      placeholder="Enter your prompt here..."
-                      className="mb-4"
-                    />
-                  </Form.Item>
+              <Form.Item
+                name="prompt"
+                label="Prompt"
+                rules={[{ required: true, message: "Vui lòng nhập mô tả!" }]}
+              >
+                <Input.TextArea
+                  rows={4}
+                  placeholder="Example: A majestic dragon flying over snow-capped mountains..."
+                />
+              </Form.Item>
 
-                  <Form.Item name="negative_prompt" label="Negative Prompt">
-                    <Input.TextArea
-                      rows={3}
-                      placeholder="Enter negative prompt (optional)"
-                    />
+              <Form.Item name="negative_prompt" label="Negative Prompt">
+                <Input.TextArea rows={2} placeholder="Example: low quality, blurry, distorted..." />
+              </Form.Item>
+
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="num_inference_steps"
+                    label="Inference Steps"
+                    rules={[{ type: 'number', min: 1, max: 25, message: "1-25 steps" }]}
+                  >
+                    <InputNumber style={{ width: "100%" }} />
                   </Form.Item>
                 </Col>
-
-                <Col xs={24}>
-                  <div className="">
-                    <Row gutter={[16, 16]}>
-                      <Col xs={24} sm={12}>
-                        <Form.Item
-                          name="num_inference_steps"
-                          label="Inference Steps"
-                          rules={[
-                            { required: true, message: "Required" },
-                            {
-                              type: "number",
-                              min: 1,
-                              max: 100,
-                              message: "1-100",
-                            },
-                          ]}
-                        >
-                          <InputNumber
-                            min={1}
-                            max={100}
-                            style={{ width: "100%" }}
-                          />
-                        </Form.Item>
-                      </Col>
-
-                      <Col xs={24} sm={12}>
-                        <Form.Item
-                          name="guidance_scale"
-                          label="Guidance Scale"
-                          rules={[
-                            { required: true, message: "Required" },
-                            {
-                              type: "number",
-                              min: 1,
-                              max: 20,
-                              message: "1-20",
-                            },
-                          ]}
-                        >
-                          <InputNumber
-                            min={1}
-                            max={20}
-                            step={0.1}
-                            style={{ width: "100%" }}
-                          />
-                        </Form.Item>
-                      </Col>
-
-                      <Col xs={24} sm={12}>
-                        <Form.Item
-                          name="width"
-                          label="Width"
-                          rules={[
-                            { required: true, message: "Required" },
-                            {
-                              type: "number",
-                              min: 128,
-                              max: 1024,
-                              message: "128-1024",
-                            },
-                          ]}
-                        >
-                          <InputNumber
-                            min={128}
-                            max={1024}
-                            step={64}
-                            style={{ width: "100%" }}
-                          />
-                        </Form.Item>
-                      </Col>
-
-                      <Col xs={24} sm={12}>
-                        <Form.Item
-                          name="height"
-                          label="Height"
-                          rules={[
-                            { required: true, message: "Required" },
-                            {
-                              type: "number",
-                              min: 128,
-                              max: 1024,
-                              message: "128-1024",
-                            },
-                          ]}
-                        >
-                          <InputNumber
-                            min={128}
-                            max={1024}
-                            step={64}
-                            style={{ width: "100%" }}
-                          />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                  </div>
+                <Col span={12}>
+                  <Form.Item
+                    name="guidance_scale"
+                    label="Guidance Scale"
+                    rules={[{ type: 'number', min: 1, max: 5, message: "1-5" }]}
+                  >
+                    <InputNumber step={0.1} style={{ width: "100%" }} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="width" label="Width">
+                    <InputNumber step={64} style={{ width: "100%" }} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="height" label="Height">
+                    <InputNumber step={64} style={{ width: "100%" }} />
+                  </Form.Item>
                 </Col>
               </Row>
             </Card>
-          </Col>
-        </Row>
 
-        {/* Process Button */}
-        <Card className="shadow-md border-gray-100 mb-8 p-0">
-          <div className="flex justify-center">
-            <Form.Item className="w-full mb-0">
+            <Form.Item>
               <Button
                 type="primary"
                 htmlType="submit"
                 icon={<FormOutlined />}
                 loading={loading}
                 size="large"
-                className="w-full"
+                className="w-full h-14 text-lg rounded-xl"
                 style={{
                   background: "linear-gradient(to right, #7c5aff, #5cb8e6)",
                   border: "none",
+                  boxShadow: "0 4px 12px rgba(124, 90, 255, 0.3)"
                 }}
               >
-                Generate Image
+                {loading ? "Generating image..." : "Generate Image"}
               </Button>
             </Form.Item>
-          </div>
-        </Card>
+          </Col>
+        </Row>
       </Form>
+
       {/* Results Section */}
-      {generatedImage ? (
-        <div
-          className="p-6 rounded-xl shadow-card animate-fade-in"
-          style={{
-            background: "white",
-          }}
-        >
-          <Title level={2} className="text-center mb-8 gradient-text">
-            Generated Results
-          </Title>
-          <div className="flex justify-center">
-            <Card className="shadow-card border-gray-100 inline-block">
+      <div ref={resultsRef} className="mt-12">
+        {generatedImage && (
+          <Card 
+            className="shadow-card border-none animate-fade-in"
+            title={<Title level={3} className="text-center m-0 py-4">Kết quả</Title>}
+          >
+            <div className="flex justify-center p-4">
               <Image
                 src={generatedImage}
-                alt="Generated"
-                className="rounded-lg"
-                style={{ display: "block", maxWidth: "100%", height: "auto" }}
+                alt="Generated Result"
+                className="rounded-lg shadow-lg"
+                style={{ maxWidth: "100%", height: "auto" }}
+                fallback="https://via.placeholder.com/512?text=Error+Loading+Image"
               />
-            </Card>
-          </div>
-        </div>
-      ) : null}
-
-      <div ref={resultsRef} />
+            </div>
+            <div className="text-center mt-6">
+              <Button 
+                type="default" 
+                href={generatedImage} 
+                download="generated_image.png"
+                target="_blank"
+              >
+                Tải ảnh về máy
+              </Button>
+            </div>
+          </Card>
+        )}
+      </div>
     </div>
   );
 };

@@ -5,15 +5,16 @@ import os
 import re
 import sys
 import time
+import traceback
 from typing import Any, Tuple
 
 import PIL.Image
 import numpy as np
+import torch
 
-# Configure HuggingFace Hub for better download performance
-os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = "300"  # 5 minutes per chunk
-os.environ["HF_HUB_ETAG_TIMEOUT"] = "60"  # 1 minute for metadata
-os.environ["HF_HUB_CHUNK_TIMEOUT"] = "60"  # 1 minute per chunk
+os.environ["HF_HUB_DOWNLOAD_TIMEOUT"] = "300"
+os.environ["HF_HUB_ETAG_TIMEOUT"] = "60"
+os.environ["HF_HUB_CHUNK_TIMEOUT"] = "60"
 
 _EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="colorize")
 
@@ -28,25 +29,11 @@ device = settings.DEVICE
 # ---------------------------------------------------------------------------
 # Model identifiers
 # ---------------------------------------------------------------------------
-BASE_MODEL_ID        = "stabilityai/stable-diffusion-xl-base-1.0"
-LIGHTNING_REPO       = "ByteDance/SDXL-Lightning"
-LIGHTNING_FILE       = "sdxl_lightning_4step_unet.safetensors"
-CONTROLNET_REPO      = "nickpai/sdxl_light_caption_output"
-CONTROLNET_LOCAL_DIR = "sdxl_light_caption_output"
-CONTROLNET_SUBDIR    = "sdxl_light_caption_output/checkpoint-30000/controlnet"
-CAPTION_MODEL_ID     = "Salesforce/blip-image-captioning-base"
-CONTROL_SIZE         = 1024
+BASE_MODEL_ID         = os.path.abspath("models/realisticVisionV60B1_v51HyperVAE.safetensors") 
+CONTROLNET_MODEL_PATH = os.path.abspath("models/controlnet_recolor")
+CAPTION_MODEL_ID      = "Salesforce/blip-image-captioning-base"
 
-DEFAULT_NEGATIVE_PROMPT = (
-    "low quality, bad quality, low contrast, black and white, bw, monochrome, "
-    "grainy, blurry, historical, restored, desaturate"
-)
-
-# ---------------------------------------------------------------------------
-# Words/phrases to strip from auto-generated captions.
-# ---------------------------------------------------------------------------
 _UNLIKELY_WORDS = []
-
 _a1 = [f"{i}s" for i in range(1900, 2000)]
 _a2 = [f"{i}" for i in range(1900, 2000)]
 _a3 = [f"year {i}" for i in range(1900, 2000)]
@@ -58,78 +45,36 @@ _b4 = [f"circa {y[0]} {y[1]} {y[2]} {y[3]}" for y in _a1]
 
 _MANUAL_WORDS = [
     "black and white,", "black and white", "black & white,", "black & white",
-    "circa", "balck and white,", "monochrome,",
-    "black-and-white,", "black-and-white photography,",
-    "black - and - white photography,", "monochrome bw,",
-    "black white,", "black an white,",
-    "grainy footage,", "grainy footage", "grainy photo,", "grainy photo",
-    "b&w photo", "back and white", "back and white,",
-    "monochrome contrast", "monochrome", "grainy",
-    "grainy photograph,", "grainy photograph", "low contrast,", "low contrast",
-    "b & w", "grainy black-and-white photo,", "bw", "bw,",
-    "grainy black-and-white photo",
-    "b & w,", "b&w,", "b&w!,", "b&w",
-    "black - and - white,", "bw photo,", "grainy  photo,",
-    "black-and-white photo,", "black-and-white photo",
-    "black - and - white photography",
-    "b&w photo,", "monochromatic photo,", "grainy monochrome photo,",
-    "monochromatic",
+    "circa", "balck and white,", "monochrome,", "black-and-white,",
+    "black-and-white photography,", "black - and - white photography,",
+    "monochrome bw,", "black white,", "black an white,", "grainy footage,",
+    "grainy footage", "grainy photo,", "grainy photo", "b&w photo",
+    "back and white", "back and white,", "monochrome contrast", "monochrome",
+    "grainy", "grainy photograph,", "grainy photograph", "low contrast,",
+    "low contrast", "b & w", "grainy black-and-white photo,", "bw", "bw,",
+    "grainy black-and-white photo", "b & w,", "b&w,", "b&w!,", "b&w",
+    "black - and - white,", "bw photo,", "grainy  photo,", "black-and-white photo,",
+    "black-and-white photo", "black - and - white photography", "b&w photo,",
+    "monochromatic photo,", "grainy monochrome photo,", "monochromatic",
     "blurry photo,", "blurry,", "blurry photography,", "monochromatic photo",
     "black - and - white photograph,", "black - and - white photograph",
-    "black on white,", "black on white", "black-and-white",
-    "historical image,", "historical picture,",
-    "historical photo,", "historical photograph,",
+    "black on white,", "black on white", "black-and-white", "historical image,",
+    "historical picture,", "historical photo,", "historical photograph,",
     "archival photo,", "taken in the early", "taken in the late",
     "taken in the", "historic photograph,", "restored,", "restored",
-    "historical photo", "historical setting,",
-    "historic photo,", "historic",
+    "historical photo", "historical setting,", "historic photo,", "historic",
     "desaturated!!,", "desaturated!,", "desaturated,", "desaturated",
     "taken in", "shot on leica", "shot on leica sl2", "sl2",
     "taken with a leica camera", "leica sl2", "leica", "setting",
     "overcast day", "overcast weather", "slight overcast", "overcast",
-    "picture taken in", "photo taken in",
-    ", photo", ",  photo", ",   photo", ",    photo", ", photograph",
-    ",,", ",,,", ",,,,", " ,", "  ,", "   ,", "    ,",
+    "picture taken in", "photo taken in", ", photo", ",  photo", ",   photo",
+    ",    photo", ", photograph", ",,", ",,,", ",,,,", " ,", "  ,", "   ,", "    ,",
 ]
-
 _UNLIKELY_WORDS.extend(_a1 + _a2 + _a3 + _a4 + _b1 + _b2 + _b3 + _b4 + _MANUAL_WORDS)
 
-# ---------------------------------------------------------------------------
-# Download helpers with retry logic for Windows
-# ---------------------------------------------------------------------------
-
-def _download_with_retry(download_fn, max_retries=3, backoff_factor=2):
-    """Retry download with exponential backoff for socket errors."""
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Download attempt {attempt + 1}/{max_retries}")
-            result = download_fn()
-            logger.info(f"Download succeeded on attempt {attempt + 1}")
-            return result
-        except OSError as e:
-            if "10055" in str(e) or "buffer" in str(e).lower():  # Socket buffer error
-                if attempt < max_retries - 1:
-                    wait_time = backoff_factor ** attempt
-                    logger.warning(f"Socket buffer error, retrying in {wait_time}s: {e}")
-                    time.sleep(wait_time)
-                    continue
-            raise
-        except Exception as e:
-            if attempt < max_retries - 1 and ("timeout" in str(e).lower() or "connection" in str(e).lower()):
-                wait_time = backoff_factor ** attempt
-                logger.warning(f"Connection error, retrying in {wait_time}s: {e}")
-                time.sleep(wait_time)
-                continue
-            raise
-    raise RuntimeError(f"Download failed after {max_retries} attempts")
-
-# ---------------------------------------------------------------------------
-# Module-level cache
-# ---------------------------------------------------------------------------
 _pipe = None
 _caption_processor = None
 _caption_model = None
-
 
 def _get_or_load_pipeline():
     global _pipe, _caption_processor, _caption_model
@@ -137,21 +82,12 @@ def _get_or_load_pipeline():
     if _pipe is not None:
         return _pipe, _caption_processor, _caption_model
 
-    import torch
     from diffusers import (
-        StableDiffusionXLControlNetPipeline,
+        StableDiffusionControlNetPipeline, 
         ControlNetModel,
-        EulerDiscreteScheduler,
-        UNet2DConditionModel,
-        AutoencoderKL,
+        EulerAncestralDiscreteScheduler,
     )
     from transformers import BlipProcessor, BlipForConditionalGeneration
-    from safetensors.torch import load_file
-    from huggingface_hub import hf_hub_download, snapshot_download
-
-    _num_threads = max(1, (os.cpu_count() or 4) // 2)
-    torch.set_num_threads(_num_threads)
-    torch.set_num_interop_threads(max(1, _num_threads // 2))
 
     weight_dtype = torch.float16 if device == "cuda" else torch.float32
 
@@ -160,68 +96,44 @@ def _get_or_load_pipeline():
         torch.backends.cudnn.allow_tf32 = True
         torch.backends.cudnn.benchmark = True
 
-    logger.info(f"Ensuring ControlNet snapshot ({CONTROLNET_REPO})...")
-    _download_with_retry(
-        lambda: snapshot_download(repo_id=CONTROLNET_REPO, local_dir=CONTROLNET_LOCAL_DIR)
+    logger.info("Loading ControlNet Recolor...")
+    controlnet = ControlNetModel.from_pretrained(
+        CONTROLNET_MODEL_PATH, 
+        torch_dtype=weight_dtype
     )
 
-    logger.info("Loading VAE...")
-    vae = AutoencoderKL.from_pretrained(
-        BASE_MODEL_ID, subfolder="vae", torch_dtype=weight_dtype,
-    )
-
-    logger.info("Loading UNet from SDXL-Lightning...")
-    unet_config = UNet2DConditionModel.load_config(BASE_MODEL_ID, subfolder="unet")
-    unet = UNet2DConditionModel.from_config(unet_config)
-    
-    # Download Lightning model with retry
-    lightning_file_path = _download_with_retry(
-        lambda: hf_hub_download(LIGHTNING_REPO, LIGHTNING_FILE)
-    )
-    unet.load_state_dict(load_file(lightning_file_path))
-    unet = unet.to(dtype=weight_dtype)
-
-    logger.info("Loading ControlNet...")
-    controlnet = ControlNetModel.from_pretrained(CONTROLNET_SUBDIR, torch_dtype=weight_dtype)
-
-    logger.info("Assembling SDXL-ControlNet pipeline...")
-    pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
-        BASE_MODEL_ID, vae=vae, unet=unet, controlnet=controlnet,
+    logger.info("Assembling SD 1.5 Txt2Img Pipeline...")
+    pipe = StableDiffusionControlNetPipeline.from_single_file(
+        BASE_MODEL_ID, 
+        controlnet=controlnet,
         torch_dtype=weight_dtype,
+        safety_checker=None
     )
-    pipe.scheduler = EulerDiscreteScheduler.from_config(
-        pipe.scheduler.config, timestep_spacing="trailing",
-    )
-    pipe.safety_checker = None
+    
+    pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
 
     if device == "cuda":
-        pipe.enable_model_cpu_offload()
-        logger.info("Enabled model CPU offload (peak VRAM ~3 GB).")
-        # NOTE: xformers is intentionally NOT enabled here.
-        # enable_xformers_memory_efficient_attention() + enable_model_cpu_offload()
-        # causes a process crash (WinError 10054).
+        pipe.enable_model_cpu_offload() 
+        logger.info("Enabled model CPU offload.")
+        try:
+            pipe.enable_xformers_memory_efficient_attention()
+        except Exception as e:
+            pipe.enable_attention_slicing(slice_size=1)
     else:
         pipe.to("cpu", dtype=torch.float32)
 
-    pipe.enable_attention_slicing(slice_size=1)
     pipe.enable_vae_slicing()
     if device == "cuda":
         pipe.enable_vae_tiling()
 
-    logger.info("Loading BLIP captioning model (CPU-only)...")
+    logger.info("Loading BLIP captioning model...")
     _caption_processor = BlipProcessor.from_pretrained(CAPTION_MODEL_ID)
     _caption_model = BlipForConditionalGeneration.from_pretrained(
         CAPTION_MODEL_ID, torch_dtype=torch.float32,
     ).to("cpu").eval()
 
     _pipe = pipe
-    logger.info("Colorize pipeline ready (SDXL-Lightning + ControlNet).")
     return _pipe, _caption_processor, _caption_model
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _clean_caption(caption):
     for word in _UNLIKELY_WORDS:
@@ -230,28 +142,29 @@ def _clean_caption(caption):
     caption = re.sub(r"\s{2,}", " ", caption)
     return caption.strip().strip(",").strip()
 
-
-def _apply_color(grayscale_rgb, color_map, intensity=1.0):
+def _apply_color(grayscale_rgb, color_map, saturation_boost=1.35):
+    # Khôi phục độ sáng từ ảnh gốc, lấy màu từ AI và cho phép tăng đậm màu (Saturation)
     grayscale_lab = grayscale_rgb.convert("LAB")
     color_map_lab = color_map.convert("LAB")
 
     l_channel, _, _ = grayscale_lab.split()
     _, a_channel, b_channel = color_map_lab.split()
 
-    if intensity < 1.0:
+    if saturation_boost != 1.0:
         neutral = 128.0
+        # Khuếch đại khoảng cách màu từ điểm trung tính (128)
         a_arr = np.array(a_channel, dtype=np.float64)
         b_arr = np.array(b_channel, dtype=np.float64)
-        a_blended = (neutral + intensity * (a_arr - neutral)).clip(0, 255).astype(np.uint8)
-        b_blended = (neutral + intensity * (b_arr - neutral)).clip(0, 255).astype(np.uint8)
+        
+        a_blended = (neutral + saturation_boost * (a_arr - neutral)).clip(0, 255).astype(np.uint8)
+        b_blended = (neutral + saturation_boost * (b_arr - neutral)).clip(0, 255).astype(np.uint8)
+        
         a_channel = PIL.Image.fromarray(a_blended, mode="L")
         b_channel = PIL.Image.fromarray(b_blended, mode="L")
 
     return PIL.Image.merge("LAB", (l_channel, a_channel, b_channel)).convert("RGB")
 
-
 def _generate_caption(image, processor, model):
-    import torch
     with torch.inference_mode():
         inputs = processor(image, "a photography of", return_tensors="pt").to(
             "cpu", dtype=torch.float32,
@@ -260,101 +173,99 @@ def _generate_caption(image, processor, model):
 
     raw_caption = processor.decode(caption_ids[0], skip_special_tokens=True)
     caption = _clean_caption(raw_caption)
-    logger.info(f"BLIP caption: {raw_caption!r} -> cleaned: {caption!r}")
     return caption
 
+def _sync_colorize(input_params, image):
+    try:
+        if device == "cuda":
+            gc.collect()
+            torch.cuda.empty_cache()
 
-# ---------------------------------------------------------------------------
-# Core service
-# ---------------------------------------------------------------------------
+        pipe, processor, caption_model = _get_or_load_pipeline()
 
-def _sync_colorize(input, image):
-    import torch
+        original_size = image.size
+        
+        max_dim = getattr(input_params, "max_dimension", 768)
+        if max(original_size) > max_dim:
+            ratio = max_dim / max(original_size)
+            new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
+            new_size = (new_size[0] // 64 * 64, new_size[1] // 64 * 64)
+            image = image.resize(new_size, PIL.Image.LANCZOS)
+        else:
+            new_size = (original_size[0] // 64 * 64, original_size[1] // 64 * 64)
+            if new_size != original_size:
+                image = image.resize(new_size, PIL.Image.LANCZOS)
 
-    if device == "cuda":
-        gc.collect()
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
-        gc.collect()
-        torch.cuda.empty_cache()
-        logger.info(
-            f"VRAM before colorize: "
-            f"{torch.cuda.memory_allocated() / 1024**3:.2f} GB allocated, "
-            f"{torch.cuda.memory_reserved() / 1024**3:.2f} GB reserved"
-        )
+        init_image = image.convert("L").convert("RGB")
+        control_image = init_image.copy()
 
-    pipe, processor, caption_model = _get_or_load_pipeline()
+        semantic_caption = _generate_caption(image, processor, caption_model)
+        user_prompt = (input_params.prompt or "").strip()
+        
+        # Thêm từ khóa "Kodak color film" và "vivid skin tones" giúp ảnh cũ lên màu có sức sống
+        final_prompt = f"{semantic_caption}, Kodak color film, vivid skin tones, high quality, highly detailed, photorealistic. {user_prompt}"
+        negative_prompt = "distorted, artifacts, oversaturated, neon, glowing"
 
-    original_size = image.size
-    logger.info(f"Original image size: {original_size}")
+        seed = getattr(input_params, "seed", -1)
+        if seed == -1:
+            seed = int(time.time()) % 100000
+        generator = torch.Generator(device="cpu").manual_seed(seed)
 
-    control_image = image.convert("L").convert("RGB").resize(
-        (CONTROL_SIZE, CONTROL_SIZE), PIL.Image.LANCZOS
-    )
+        # Giữ nguyên độ an toàn của ControlNet Recolor
+        safe_guidance_scale = 2.5
 
-    user_prompt = (input.prompt or "").strip()
-    if not user_prompt:
-        logger.info("No user prompt -- generating auto-caption with BLIP...")
-        final_prompt = _generate_caption(image, processor, caption_model)
-    elif input.append_caption:
-        caption = _generate_caption(image, processor, caption_model)
-        final_prompt = f"{user_prompt}, {caption}"
-    else:
-        final_prompt = user_prompt
+        with torch.inference_mode():
+            result = pipe(
+                prompt=final_prompt,
+                negative_prompt=negative_prompt,
+                image=control_image,
+                controlnet_conditioning_scale=1.0,
+                num_inference_steps=input_params.num_inference_steps,
+                guidance_scale=safe_guidance_scale,
+                generator=generator,
+            )
 
-    negative_prompt = input.negative_prompt or DEFAULT_NEGATIVE_PROMPT
-    logger.info(f"Colorizing -- prompt: {final_prompt!r}")
+        # Bơm thêm 35% độ đậm màu (saturation_boost = 1.35) để ảnh rực rỡ hơn
+        color_intensity = getattr(input_params, "color_intensity", 1.0)
+        final_saturation = 1.35 * color_intensity
 
-    generator = torch.Generator(device="cpu").manual_seed(input.seed)
+        colorized = _apply_color(
+            init_image,
+            result.images[0],
+            saturation_boost=final_saturation,
+        ).resize(original_size, PIL.Image.LANCZOS)
 
-    with torch.inference_mode():
-        result = pipe(
-            prompt=[final_prompt],
-            negative_prompt=[negative_prompt],
-            num_inference_steps=input.num_inference_steps,
-            guidance_scale=input.guidance_scale,
-            generator=generator,
-            image=control_image,
-        )
+        del result
+        if device == "cuda":
+            torch.cuda.empty_cache()
 
-    colorized = _apply_color(
-        control_image,
-        result.images[0],
-        intensity=input.color_intensity,
-    ).resize(original_size, PIL.Image.LANCZOS)
+        return colorized
 
-    del result
-    if device == "cuda":
-        torch.cuda.empty_cache()
-
-    logger.info("Colorization complete.")
-    return colorized
-
+    except Exception as e:
+        logger.error(f"💥 LỖI TẠI LÕI AI (RENDER):\n{traceback.format_exc()}")
+        raise e
 
 class ColorizeService(BaseSDService):
-    async def run(self, input):
-        image = await self.process_image_url(input.image_url)
-
-        control_preview = image.convert("L").convert("RGB").resize(
-            (CONTROL_SIZE, CONTROL_SIZE), PIL.Image.LANCZOS
-        )
-        self._debug_image(control_preview, "control_image")
-
-        loop = asyncio.get_event_loop()
+    async def run(self, input_params):
         try:
-            # Run colorization with timeout to prevent socket buffer hangs
-            colorized = await asyncio.wait_for(
-                loop.run_in_executor(
-                    _EXECUTOR,
-                    _sync_colorize,
-                    input,
-                    image,
-                ),
-                timeout=600  # 10 minutes timeout
-            )
-        except asyncio.TimeoutError:
-            logger.error("Colorization timed out (socket buffer issue)")
-            raise RuntimeError("Colorization process timed out. Try again or reduce image size.")
+            image = await self.process_image_url(input_params.image_url)
+            loop = asyncio.get_event_loop()
+            try:
+                colorized = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        _EXECUTOR,
+                        _sync_colorize,
+                        input_params,
+                        image,
+                    ),
+                    timeout=600
+                )
+            except asyncio.TimeoutError:
+                raise RuntimeError("Colorization process timed out.")
 
-        self._debug_image(colorized, "colorized")
-        return await self.save_image(colorized)
+            self._debug_image(colorized, "colorized")
+            return await self.save_image(colorized)
+            
+        except Exception as e:
+            logger.error(f"🔥 LỖI CỰC NGHIÊM TRỌNG BỊ ẨN:\n{traceback.format_exc()}")
+            raise e

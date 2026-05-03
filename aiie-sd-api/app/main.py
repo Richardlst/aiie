@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import socket
 import sys
+import os
+import torch
 
 # Windows socket buffer fix - increase buffer sizes
 if sys.platform == "win32":
@@ -10,10 +12,20 @@ if sys.platform == "win32":
         # Increase TCP socket buffer sizes for Windows
         socket.socket.SO_SNDBUF = 8 * 1024 * 1024  # 8MB
         socket.socket.SO_RCVBUF = 8 * 1024 * 1024  # 8MB
-        import os
         os.environ["HF_DATASETS_TRUST_REMOTE_CODE"] = "1"
+        # Increase Windows page file (virtual memory) to prevent paging errors
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
     except Exception as e:
         pass
+
+# Configure PyTorch threading ONCE at startup (before models load)
+# This must be done before any parallel work starts
+_num_threads = max(1, (os.cpu_count() or 4) // 2)
+torch.set_num_threads(_num_threads)
+try:
+    torch.set_num_interop_threads(max(1, _num_threads // 2))
+except RuntimeError:
+    pass  # Already set or parallel work started
 
 from app.dependencies import (
     ExpandServiceDep,

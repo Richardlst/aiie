@@ -14,7 +14,17 @@ logger = setup_logger("Main")
 async def lifespan(app: FastAPI):
     # Create all database tables
     await create_db_and_tables()
+    logger.info("Application startup complete")
+    
     yield
+    
+    # Cleanup: close HTTP sessions
+    logger.info("Application shutting down...")
+    from app.api.image.router import close_session
+    from app.utils.http_client import close_http_session
+    await close_session()
+    await close_http_session()
+    logger.info("Application cleanup complete")
 
 
 app = FastAPI(lifespan=lifespan)

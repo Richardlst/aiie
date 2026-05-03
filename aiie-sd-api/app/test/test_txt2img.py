@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 # Import the Text2ImgRequest model and settings
-from app.models import Text2ImgRequest, SDModel
+from app.models import Text2ImgRequest
 from app.settings import settings
 
 # Setup
@@ -15,8 +15,6 @@ torch_dtype = torch.float16 if device == "cuda" else torch.float32
 # Input from test_txt2img.py
 input = Text2ImgRequest(
     prompt="A corgi dog lying comfortably on bright green lawn, white wooden farmhouse in background, afternoon sunlight, clear blue sky, detailed fur texture, relaxed posture, head resting on paws, warm golden hour lighting, photorealistic",
-    # You can customize these parameters as needed
-    model=SDModel.STABLE_DIFFUSION_V1_5,
     negative_prompt="deformed, blurry, bad anatomy, extra limbs, poorly drawn face, mutation, distorted, unrealistic background",
     num_inference_steps=30,
     guidance_scale=7.5,
@@ -32,7 +30,7 @@ if device == "cuda":
 
 # Load the pipeline
 pipe = StableDiffusionPipeline.from_pretrained(
-    input.model,
+    "runwayml/stable-diffusion-v1-5",
     torch_dtype=torch_dtype,
     safety_checker=None,
 ).to(device)
