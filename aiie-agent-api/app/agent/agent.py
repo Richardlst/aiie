@@ -30,7 +30,7 @@ class Agent:
         self.__connection_manager = connection_manager
 
     def __init_graph(self):
-        graph_builder = StateGraph(State)
+        graph_builder =  StateGraph(State)
 
         # Add nodes
         graph_builder.add_node(*self.__get_node(self.__chat_node))

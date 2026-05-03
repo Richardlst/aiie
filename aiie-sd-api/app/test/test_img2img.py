@@ -14,7 +14,7 @@ import glob
 from tqdm import tqdm
 
 # Import the Img2ImgRequest model and settings
-from app.models import Img2ImgRequest, SDModel
+from app.models import Img2ImgRequest
 from app.settings import settings
 
 # Setup
@@ -29,7 +29,6 @@ output_dir = "eval/img2img"  # Directory to save transformed images
 input = Img2ImgRequest(
     image_url="dummy_url",  # This will be replaced in the process function
     prompt="A magical fairy-tale castle on a floating island, ethereal lighting, vibrant colors, fantasy landscape, detailed architecture, dreamy atmosphere, 8k, hyper-detailed, professional digital art",
-    model=SDModel.STABLE_DIFFUSION_V1_5,
     negative_prompt="deformed, blurry, bad anatomy, disfigured, poorly drawn face, mutation, mutated, ugly, poorly drawn, low quality, grainy",
     num_inference_steps=40,
     guidance_scale=9.0,
@@ -106,7 +105,7 @@ controlnet = ControlNetModel.from_pretrained(
 
 # Create the pipeline
 pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-    input.model,
+    "runwayml/stable-diffusion-v1-5",
     vae=vae,
     controlnet=controlnet,
     safety_checker=None,

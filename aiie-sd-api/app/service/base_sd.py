@@ -6,7 +6,7 @@ from fastapi import HTTPException, UploadFile
 import cv2
 import numpy as np
 
-from app.models import BaseGenerationRequest, SDModel
+from app.models import BaseGenerationRequest
 from app.service.storage import StorageService
 from app.utils import get_unique_filename, process_image_url
 from app.logger import setup_logger
@@ -50,11 +50,6 @@ class BaseSDService(ABC):
         return response.data.url
 
     def _upgrade_prompt(self, request: BaseGenerationRequest) -> str:
-        if request.model == SDModel.MO_DI_DIFFUSION:
-            request.prompt = request.prompt + ", modern disney style"
-        elif request.model == SDModel.GHIBLY_DIFFUSION:
-            request.prompt = request.prompt + ", ghibli style"
-
         return request
 
     def _resize_image(

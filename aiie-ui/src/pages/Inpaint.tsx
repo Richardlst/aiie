@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+  import { useState, useRef } from "react";
 import {
   Form,
   Input,
@@ -28,12 +28,12 @@ const { Title, Paragraph } = Typography;
 
 const initialValues: Omit<InpaintRequest, "image_url" | "mask_url" | "reference_image_url"> = {
   negative_prompt:
-    "blurry, low quality, artifacts, seam, distorted, noise, grain, overexposed, underexposed, watermark",
+    "blurry, low quality, artifacts, seam, distorted, noise, grain, overexposed, underexposed, watermark, text, logo, signature, branding, copyright, watermark overlay, text overlay, branded content, emblem, symbol, badge, visible repairs, patchy, uneven, letters, numbers, rendered text, corrupted text, garbled text, random letters, legible text, gibberish, written text, handwriting, gray blocks, dark patches, pixelated, unnatural colors, blocked areas, dark spots, black marks, stains, specks, spots, blemishes",
   num_inference_steps: 30,
   guidance_scale: 7.5,
-  strength: 0.99,
-  ip_adapter_scale: 0.6,
-  prompt: "restore damaged area, seamless repair, matching texture and tone, high quality, detailed",
+  strength: 0.8,
+  ip_adapter_scale: 0.0,
+  prompt: "restore damaged area, seamless repair, matching texture and tone, high quality, detailed, natural seamless restoration, smooth blending",
 };
 
 const Inpaint = () => {
