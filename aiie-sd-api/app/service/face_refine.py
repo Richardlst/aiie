@@ -80,6 +80,9 @@ def _sync_face_refine(request: FaceRefineRequest, image: PIL.Image.Image) -> PIL
     """Blocking face restoration – executed in a dedicated thread."""
     gc.collect()
 
+    # Store original size to maintain dimensions after processing
+    original_size = image.size
+
     restorer = _get_or_load_restorer(upscale=request.upscale)
 
     # Convert PIL (RGB) → OpenCV (BGR) as required by GFPGAN
@@ -104,6 +107,12 @@ def _sync_face_refine(request: FaceRefineRequest, image: PIL.Image.Image) -> PIL
 
     # Convert back: BGR → RGB → PIL
     result_pil = PIL.Image.fromarray(cv2.cvtColor(restored_img, cv2.COLOR_BGR2RGB))
+    
+    # Resize back to original dimensions to maintain original size
+    if result_pil.size != original_size:
+        logger.info(f"Resizing output from {result_pil.size} back to original size {original_size}")
+        result_pil = result_pil.resize(original_size, PIL.Image.Resampling.LANCZOS)
+    
     logger.info(f"Face refinement complete – output size: {result_pil.size}")
     return result_pil
 

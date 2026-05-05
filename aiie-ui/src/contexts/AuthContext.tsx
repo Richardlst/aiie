@@ -18,10 +18,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [authData, setAuthData] = useState<AuthData | null>(null);
 
   useEffect(() => {
-    const local_authData = localStorage.getItem("authData");
-    if (local_authData) {
-      setAuthData(JSON.parse(local_authData));
-    }
+    // Clear all authentication data on app startup
+    // This forces all users to log in when the app opens
+    localStorage.removeItem("authData");
+    setAuthData(null);
   }, []);
 
   const login = (accessToken: string) => {

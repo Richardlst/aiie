@@ -4,7 +4,8 @@ from typing import Any, Optional
 import numpy as np
 import torch
 from PIL import Image, ImageFilter
-from diffusers import StableDiffusionInpaintPipeline, DDIMScheduler
+from diffusers import StableDiffusionInpaintPipeline, EulerAncestralDiscreteScheduler
+from diffusers import StableDiffusionInpaintPipeline, EulerAncestralDiscreteScheduler
 
 from app.models import InpaintRequest
 from app.service.base_sd import BaseSDService
@@ -14,10 +15,10 @@ from app.logger import setup_logger
 logger = setup_logger("InpaintService")
 device = settings.DEVICE
 
-# Plain SD-inpainting — NO ControlNet.
-# ControlNet control_v11p_sd15_inpaint is designed to *preserve* original
-# structure, which causes it to reproduce cracks/tears instead of removing them.
-BASE_MODEL_ID        = "runwayml/stable-diffusion-inpainting"
+# Sử dụng model Hyper Inpaint chuyên dụng
+BASE_MODEL_ID        = "./models/realisticVisionV60B1_v51HyperInpaintVAE.safetensors"
+# Sử dụng model Hyper Inpaint chuyên dụng
+BASE_MODEL_ID        = "./models/realisticVisionV60B1_v51HyperInpaintVAE.safetensors"
 IP_ADAPTER_REPO      = "h94/IP-Adapter"
 IP_ADAPTER_SUBFOLDER = "models"
 IP_ADAPTER_WEIGHT    = "ip-adapter_sd15.bin"
@@ -35,22 +36,21 @@ def _load_pipe() -> StableDiffusionInpaintPipeline:
         torch.cuda.empty_cache()
 
     torch_dtype = torch.float16 if device == "cuda" else torch.float32
-    variant = "fp16" if device == "cuda" else None
 
     logger.info("Loading SD inpaint pipeline…")
-    pipe = StableDiffusionInpaintPipeline.from_pretrained(
+    pipe = StableDiffusionInpaintPipeline.from_single_file(
+    pipe = StableDiffusionInpaintPipeline.from_single_file(
         BASE_MODEL_ID,
         torch_dtype=torch_dtype,
         safety_checker=None,
-        variant=variant,
     )
 
-    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+    # Đổi sang Euler A cho model Hyper/Turbo để ảnh mượt mà hơn ở steps thấp
+    pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
+    # Đổi sang Euler A cho model Hyper/Turbo để ảnh mượt mà hơn ở steps thấp
+    pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
     pipe.vae.enable_slicing()
 
-    # Load IP-Adapter BEFORE enable_model_cpu_offload so image_encoder is
-    # registered and can be pinned to CUDA afterward.
-    # Must also be before any attention-slicing (conflicts with IPAdapterAttnProcessor).
     logger.info("Loading IP-Adapter…")
     pipe.load_ip_adapter(
         IP_ADAPTER_REPO,
@@ -62,7 +62,6 @@ def _load_pipe() -> StableDiffusionInpaintPipeline:
 
     if device == "cuda":
         pipe.enable_model_cpu_offload()
-        # image_encoder is not included in cpu-offload — keep it on CUDA.
         if pipe.image_encoder is not None:
             pipe.image_encoder.to(device)
         try:
@@ -79,12 +78,8 @@ def _load_pipe() -> StableDiffusionInpaintPipeline:
 
 
 def _dilate_mask(mask: Image.Image, radius: int) -> Image.Image:
-    """Morphological dilation: expand white (masked) regions by `radius` pixels.
-
-    Uses MaxFilter with kernel size = 2*radius+1.  This ensures that the torn
-    boundary — which may have fractional coverage in the feathered mask — ends
-    up fully *inside* the inpainted region during compositing.
-    """
+    """Mở rộng vùng trắng của mask"""
+    """Mở rộng vùng trắng của mask"""
     if radius <= 0:
         return mask
     kernel = 2 * radius + 1
@@ -92,6 +87,8 @@ def _dilate_mask(mask: Image.Image, radius: int) -> Image.Image:
 
 
 def _feather_mask(mask: Image.Image, radius: int) -> Image.Image:
+    """Làm mờ viền mask để trộn ảnh mượt hơn"""
+    """Làm mờ viền mask để trộn ảnh mượt hơn"""
     if radius <= 0:
         return mask
     return mask.filter(ImageFilter.GaussianBlur(radius=radius))
@@ -102,33 +99,13 @@ def _composite_with_original(
     inpainted: Image.Image,
     mask: Image.Image,
 ) -> Image.Image:
+    """Ghép vùng ảnh mới tạo vào ảnh gốc dựa trên mask"""
+    """Ghép vùng ảnh mới tạo vào ảnh gốc dựa trên mask"""
     orig_np = np.array(original.convert("RGB"), dtype=np.float32)
     inp_np  = np.array(inpainted.convert("RGB"), dtype=np.float32)
     msk_np  = np.array(mask.convert("L"), dtype=np.float32)[:, :, None] / 255.0
     blended = inp_np * msk_np + orig_np * (1.0 - msk_np)
     return Image.fromarray(blended.clip(0, 255).astype(np.uint8))
-
-
-def _make_clean_reference(image: Image.Image, mask: Image.Image) -> Image.Image:
-    """Fill masked (damaged) regions with the average colour of the unmasked area.
-
-    Used when no external reference image is provided — this prevents the CLIP
-    image encoder from encoding cracks/tears as features to reproduce.
-    """
-    img_arr  = np.array(image.convert("RGB"), dtype=np.float32)
-    msk_arr  = np.array(mask.convert("L"), dtype=np.float32) / 255.0   # 1=inpaint, 0=keep
-
-    # Compute mean colour of the undamaged pixels only
-    keep_mask = (1.0 - msk_arr) > 0.5
-    if keep_mask.any():
-        mean_color = img_arr[keep_mask].mean(axis=0)   # shape (3,)
-    else:
-        mean_color = np.array([127.0, 127.0, 127.0])
-
-    # Replace masked pixels with that mean colour
-    clean = img_arr.copy()
-    clean[msk_arr > 0.5] = mean_color
-    return Image.fromarray(clean.clip(0, 255).astype(np.uint8))
 
 
 class InpaintService(BaseSDService):
@@ -147,27 +124,20 @@ class InpaintService(BaseSDService):
         mask_raw = mask_raw.resize(image.size, Image.LANCZOS).convert("L")
         input    = self._upgrade_prompt(input)
 
-        blur_radius = input.mask_blur_radius if input.mask_blur_radius is not None else 8
+        blur_radius = input.mask_blur_radius if input.mask_blur_radius is not None else 16
+        blur_radius = input.mask_blur_radius if input.mask_blur_radius is not None else 16
 
         w = image.width  // 8 * 8
         h = image.height // 8 * 8
         image_sd    = image.resize((w, h), Image.LANCZOS)
         mask_raw_sd = mask_raw.resize((w, h), Image.LANCZOS)
 
-        # Pre-fill pipeline input: replace masked pixels (torn paper, cracks)
-        # with the mean colour of the undamaged region before passing to SD.
-        # This removes torn-paper context at the mask boundary so the pipeline
-        # doesn't reproduce the tear shape in its generated output.
-        # We dilate slightly before filling to also hide the torn border pixels
-        # that sit just outside the raw mask.
-        fill_mask     = _dilate_mask(mask_raw_sd, radius=blur_radius)
-        image_sd_fill = _make_clean_reference(image_sd, fill_mask)
-
-        # SD pipeline mask: feather over the fill mask so generation blends smoothly
-        mask_sd = _feather_mask(fill_mask, radius=blur_radius)
-
-        # Composite mask: dilate much more than feather so the feather gradient
-        # falls fully INSIDE the inpainted region with no original bleed-through.
+        # Xử lý mask - KHÔNG điền màu xám, chỉ làm mờ (feather) và mở rộng (dilate)
+        fill_mask = _dilate_mask(mask_raw_sd, radius=blur_radius + 4)
+        mask_sd = _feather_mask(fill_mask, radius=blur_radius + 2)
+        # Xử lý mask - KHÔNG điền màu xám, chỉ làm mờ (feather) và mở rộng (dilate)
+        fill_mask = _dilate_mask(mask_raw_sd, radius=blur_radius + 4)
+        mask_sd = _feather_mask(fill_mask, radius=blur_radius + 2)
         mask_composite = _feather_mask(_dilate_mask(mask_raw_sd, radius=blur_radius * 4), radius=blur_radius)
 
         # Reference image for IP-Adapter
@@ -177,41 +147,73 @@ class InpaintService(BaseSDService):
                      .convert("RGB").resize((w, h), Image.LANCZOS)
             logger.info("Using custom reference image for IP-Adapter.")
         else:
-            # Self-reference: use the ORIGINAL (unfilled) image so the CLIP
-            # encoder captures authentic tone/style, not the mean-filled version.
-            ref_sd   = _make_clean_reference(image_sd, mask_raw_sd)
+            # Truyền thẳng ảnh gốc vào, IP-Adapter sẽ tự phân tích màu da/style
+            ref_sd = image_sd
+            # Truyền thẳng ảnh gốc vào, IP-Adapter sẽ tự phân tích màu da/style
+            ref_sd = image_sd
             ip_scale = min(ip_scale, 0.25)
             logger.info(f"Self-reference mode — ip_scale capped at {ip_scale}.")
 
         pipe.set_ip_adapter_scale(ip_scale)
 
+        # Rút gọn prompt, chỉ giữ các từ khóa làm nét và tự nhiên để tránh lỗi > 77 tokens
+        prompt = input.prompt or (
+            "flawless restoration, highly detailed skin texture, natural appearance, "
+            "perfectly blended edges, cinematic lighting, 8k resolution, raw photo"
+        )
+        negative_prompt = input.negative_prompt or (
+            "visible seams, dark spots, shadows, obvious patches, artificial, "
+            "watermark, text, blurry, bad anatomy, deformed, rough edges, pixelated"
+        )
+
+        # Truncate prompts to stay within token limit (77 tokens max)
+        prompt = self._truncate_prompt(prompt, max_tokens=77)
+        negative_prompt = self._truncate_prompt(negative_prompt, max_tokens=77)
+
+        # 🟢 BỘ LỌC THÔNG SỐ: Ép cấu hình dành riêng cho model HYPER/LIGHTNING
+        actual_steps = 6 if input.num_inference_steps > 10 else input.num_inference_steps
+        actual_cfg = 1.5 if input.guidance_scale > 3.0 else input.guidance_scale
+
         logger.info(
-            f"Inpainting {w}x{h} | steps={input.num_inference_steps} | "
-            f"cfg={input.guidance_scale} | strength={input.strength} | "
+            f"Inpainting {w}x{h} | steps={actual_steps} | "
+            f"cfg={actual_cfg} | strength={input.strength} | "
+            f"Inpainting {w}x{h} | steps={actual_steps} | "
+            f"cfg={actual_cfg} | strength={input.strength} | "
             f"mask_blur={blur_radius} | ip_scale={ip_scale}"
         )
 
         generator = torch.Generator(device="cpu").manual_seed(42)
+        
+        
         with torch.inference_mode():
             raw_result = pipe(
-                prompt=input.prompt,
-                negative_prompt=input.negative_prompt,
-                image=image_sd_fill,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                image=image_sd,         # 🟢 Truyền ảnh gốc, mô hình inpaint rất cần cái này
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                image=image_sd,         # 🟢 Truyền ảnh gốc, mô hình inpaint rất cần cái này
                 mask_image=mask_sd,
-                ip_adapter_image=ref_sd,
-                num_inference_steps=input.num_inference_steps,
-                guidance_scale=input.guidance_scale,
+                ip_adapter_image=ref_sd, 
+                num_inference_steps=actual_steps,
+                guidance_scale=actual_cfg,
+                ip_adapter_image=ref_sd, 
+                num_inference_steps=actual_steps,
+                guidance_scale=actual_cfg,
                 strength=input.strength,
                 width=w,
                 height=h,
                 generator=generator,
             ).images[0]
 
+        # Ghép vùng inpaint thành công vào ảnh gốc
+        # Ghép vùng inpaint thành công vào ảnh gốc
         output_image = _composite_with_original(image_sd, raw_result, mask_composite)
         output_image = output_image.resize(original_size, Image.LANCZOS)
 
+        # Xuất log debug (đã xóa các dòng log thừa của ảnh xám)
+        # Xuất log debug (đã xóa các dòng log thừa của ảnh xám)
         self._debug_image(image_sd,      "inpaint_input")
-        self._debug_image(image_sd_fill, "inpaint_input_filled")
         self._debug_image(mask_raw,      "inpaint_mask_raw")
         self._debug_image(mask_sd,       "inpaint_mask_soft")
         self._debug_image(ref_sd,        "inpaint_reference")

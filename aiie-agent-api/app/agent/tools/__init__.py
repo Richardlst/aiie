@@ -6,8 +6,9 @@ from .inpaint import inpaint
 from .segment import segment
 from .expand import expand
 from .sr import super_resulution
-
-tools = [text2img, img2img, inpaint, segment, expand, super_resulution]
+from .gfpgan import gfpgan
+from .colorize import colorize
+tools = [text2img, img2img, inpaint, segment, expand, super_resulution, gfpgan, colorize]
 tools_dict = {tool.name: tool for tool in tools}
 
 
