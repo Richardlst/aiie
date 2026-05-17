@@ -235,6 +235,3 @@ Lần đầu chạy sẽ tải model (~4 GB) từ Hugging Face. Có thể mất 
 - PostgreSQL chạy trên port 5433 (không 5432)
 - Lần đầu chạy SD API sẽ tải model từ Hugging Face
 
-## License
-
-Thêm license của dự án tại đây.
