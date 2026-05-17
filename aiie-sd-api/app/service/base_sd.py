@@ -49,6 +49,28 @@ class BaseSDService(ABC):
         
         return response.data.url
 
+    def _truncate_prompt(self, text: str, max_tokens: int = 77) -> str:
+        """Truncate prompt to stay within token limit (77 tokens max for CLIP).
+        
+        Simple approach: split by comma and keep enough tokens to stay under limit.
+        This prevents model errors and speeds up inference.
+        """
+        if not text:
+            return text
+            
+        # Simple approximation: ~4 characters per token on average
+        # Use conservative estimate: max_chars = max_tokens * 4
+        max_chars = max_tokens * 4
+        
+        if len(text) <= max_chars:
+            return text
+            
+        # Truncate and clean up
+        truncated = text[:max_chars].rsplit(',', 1)[0]  # Try to break at comma
+        truncated = truncated.rstrip()
+        logger.info(f"Prompt truncated from {len(text)} to {len(truncated)} characters (approx {len(truncated)//4} tokens)")
+        return truncated
+
     def _upgrade_prompt(self, request: BaseGenerationRequest) -> str:
         return request
 

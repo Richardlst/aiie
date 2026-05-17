@@ -151,6 +151,10 @@ class InpaintService(BaseSDService):
             "watermark, text, blurry, bad anatomy, deformed, rough edges, pixelated"
         )
 
+        # Truncate prompts to stay within token limit (77 tokens max)
+        prompt = self._truncate_prompt(prompt, max_tokens=77)
+        negative_prompt = self._truncate_prompt(negative_prompt, max_tokens=77)
+
         # 🟢 BỘ LỌC THÔNG SỐ: Ép cấu hình dành riêng cho model HYPER/LIGHTNING
         actual_steps = 6 if input.num_inference_steps > 10 else input.num_inference_steps
         actual_cfg = 1.5 if input.guidance_scale > 3.0 else input.guidance_scale

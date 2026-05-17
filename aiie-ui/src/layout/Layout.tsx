@@ -85,7 +85,7 @@ export default function Layout() {
             }}
           />
           <div
-            className={`fixed bottom-14 md:bottom-8 right-4 md:right-24 transition-all duration-300 ease-in-out ${isChatOpen
+            className={`fixed bottom-14 md:bottom-8 right-4 md:right-24 transition-all duration-300 ease-in-out z-50 ${isChatOpen
                 ? "opacity-100 translate-y-0"
                 : "opacity-0 translate-y-16 pointer-events-none"
               }`}
