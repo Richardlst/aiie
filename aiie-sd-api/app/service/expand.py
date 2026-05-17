@@ -117,6 +117,10 @@ class ExpandService(BaseSDService):
                 "visible seams, blurry, low quality, distorted, mirror effect, watermark"
             )
 
+            # Truncate prompts to stay within token limit (77 tokens max)
+            prompt = self._truncate_prompt(prompt, max_tokens=77)
+            negative_prompt = self._truncate_prompt(negative_prompt, max_tokens=77)
+
             # ĐIỀU CHỈNH QUAN TRỌNG: Nâng Strength lên 0.90
             # Nền ở Bước 1 đang mờ tịt, ta cần ép AI vẽ mới gần như hoàn toàn để tạo chi tiết nét,
             # AI sẽ tự động "hút" dải màu từ nền mờ đó để phối màu cho chuẩn.

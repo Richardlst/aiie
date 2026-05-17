@@ -54,6 +54,10 @@ class Txt2ImgService(BaseSDService):
             pipe = self._get_pipe()
             input = self._upgrade_prompt(input)
 
+            # Truncate prompts to stay within token limit (77 tokens max)
+            prompt = self._truncate_prompt(input.prompt, max_tokens=77)
+            negative_prompt = self._truncate_prompt(input.negative_prompt or "", max_tokens=77)
+
             actual_steps = 6 if input.num_inference_steps > 10 else input.num_inference_steps
             actual_cfg = 1.5 if input.guidance_scale > 3.0 else input.guidance_scale
             
@@ -65,8 +69,8 @@ class Txt2ImgService(BaseSDService):
             generator = torch.Generator(device=device).manual_seed(42)
 
             result = pipe(
-                prompt=input.prompt,
-                negative_prompt=input.negative_prompt,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
                 num_inference_steps=actual_steps,
                 guidance_scale=actual_cfg,
                 width=w,

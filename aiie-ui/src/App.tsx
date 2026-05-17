@@ -19,12 +19,24 @@ import {
   FaceRefine,
 } from "./pages";
 import Layout from "./layout/Layout";
+import { useAuth } from "./contexts/AuthContext";
 import "./index.css";
-const defaultRoute = "/home";
+
+// Protected layout wrapper - redirects to login if not authenticated
+const ProtectedLayout = () => {
+  const { authData } = useAuth();
+
+  if (!authData) {
+    return <Navigate to="/auth/login" replace />;
+  }
+
+  return <Layout />;
+};
 
 function App() {
   return (
     <Routes>
+      {/* Public auth routes */}
       <Route path="/auth">
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
@@ -33,8 +45,10 @@ function App() {
         <Route path="reset-password" element={<ResetPassword />} />
         <Route path="verify-email" element={<EmailVerification />} />
       </Route>
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Navigate to={defaultRoute} replace />} />
+
+      {/* Protected app routes */}
+      <Route path="/" element={<ProtectedLayout />}>
+        <Route index element={<Navigate to="/home" replace />} />
         <Route path="home" element={<Home />} />
         <Route path="super-resolution" element={<SuperResolution />} />
         <Route path="text-to-image" element={<TextToImage />} />

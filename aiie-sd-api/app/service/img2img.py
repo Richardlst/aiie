@@ -68,6 +68,7 @@ class Img2ImgService(BaseSDService):
     async def run(self, input: Img2ImgRequest) -> str:
         if device == "cuda":
             torch.cuda.empty_cache()
+            torch.cuda.synchronize()
             gc.collect()
 
         # Đường dẫn tới file LoRA flat2
@@ -80,6 +81,10 @@ class Img2ImgService(BaseSDService):
         # Đảm bảo prompt có trigger word 'flat color'
         input = self._upgrade_prompt(input)
 
+        # Truncate prompts to stay within token limit (77 tokens max)
+        prompt = self._truncate_prompt(input.prompt, max_tokens=77)
+        negative_prompt = self._truncate_prompt(input.negative_prompt or "", max_tokens=77)
+
         canny_image = self._get_canny_map(
             image,
             input.canny_low_threshold,
@@ -88,9 +93,9 @@ class Img2ImgService(BaseSDService):
 
         # Thực thi gen ảnh
         result = pipe(
-            prompt=input.prompt,
+            prompt=prompt,
             image=image,
-            negative_prompt=input.negative_prompt,
+            negative_prompt=negative_prompt,
             control_image=canny_image,
             controlnet_conditioning_scale=input.controlnet_conditioning_scale,
             num_inference_steps=input.num_inference_steps,

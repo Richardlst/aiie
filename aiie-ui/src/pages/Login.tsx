@@ -1,5 +1,5 @@
 import { Form, Input, Button, Card, message } from "antd";
-import { UserOutlined, LockOutlined, GoogleOutlined } from "@ant-design/icons";
+import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import { LoginResponse } from "../types";
 import { loginApi, sendVerificationEmailApi } from "../services/apis";
@@ -12,15 +12,13 @@ interface LoginForm {
   password: string;
 }
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_OAUTH_GOOGLE_CLIENT_ID;
-const GOOGLE_REDIRECT_URI = import.meta.env.VITE_OAUTH_GOOGLE_REDIRECT_URI;
+
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendVerificationLoading, setResendVerificationLoading] =
     useState(false);
@@ -93,22 +91,6 @@ export default function Login() {
       );
     } finally {
       setResendVerificationLoading(false);
-    }
-  };
-
-  const handleGuestLogin = async () => {
-    navigate("/");
-    messageApi.success("Logged in as guest");
-  };
-
-  const handleGoogleLogin = () => {
-    setGoogleLoading(true);
-    try {
-      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${GOOGLE_REDIRECT_URI}&response_type=code&scope=openid email profile`;
-    } catch (error) {
-      console.error("Google login failed:", error);
-      messageApi.error("Failed to redirect to Google login");
-      setGoogleLoading(false);
     }
   };
 
@@ -196,26 +178,6 @@ export default function Login() {
             </Form.Item>
 
             <div className="flex flex-col space-y-4">
-              <Button
-                onClick={handleGuestLogin}
-                className="w-full"
-                size="large"
-                disabled={loading || resendVerificationLoading}
-              >
-                Continue as Guest
-              </Button>
-              <Button
-                danger
-                onClick={handleGoogleLogin}
-                className="w-full"
-                size="large"
-                loading={googleLoading}
-                disabled={loading || resendVerificationLoading}
-              >
-                <GoogleOutlined />
-                Sign in with Google
-              </Button>
-
               <div className="text-center">
                 <span className="text-gray-600">Don't have an account? </span>
                 <Link

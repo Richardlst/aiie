@@ -42,7 +42,9 @@ export const segmentApi = async (data: SegmentRequest): Promise<GenerationRespon
 };
 
 export const expandApi = async (data: ExpandRequest): Promise<GenerationResponse> => {
-    const response = await axiosInstance.post(`${AGENT_API_URL}/image/expand`, data);
+    const response = await axiosInstance.post(`${AGENT_API_URL}/image/expand`, data, {
+        timeout: 10 * 60 * 1000 // 10 minutes
+    });
     const responseData = response.data as GenerationResponse;
     return responseData;
 };

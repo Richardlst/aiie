@@ -61,6 +61,7 @@ const Expand = () => {
     right: 0,
   });
   const resultsRef = useRef<HTMLDivElement>(null);
+  const isSubmittingRef = useRef(false);
 
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
@@ -84,11 +85,18 @@ const Expand = () => {
   };
 
   const handleGenerate = async (values: Omit<ExpandRequest, "image_url">) => {
+    // Prevent multiple submissions
+    if (isSubmittingRef.current) {
+      messageApi.warning("Đang xử lý, vui lòng chờ...");
+      return;
+    }
+
     if (imageFileList.length === 0) {
       messageApi.error("Vui lòng tải lên một ảnh");
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
     try {
       const saveResponseData = await saveImage(imageFileList[0]);
@@ -119,6 +127,7 @@ const Expand = () => {
       messageApi.error("Lỗi khi tạo ảnh");
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
