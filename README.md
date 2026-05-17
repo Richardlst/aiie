@@ -5,9 +5,11 @@ AIIE là nền tảng xử lý và tạo ảnh AI với AI Agent Chat. Các tín
 - AI Agent Chat tích hợp LangChain và LangGraph
 - Text-to-Image (Stable Diffusion)
 - Image-to-Image transformation
-- Inpainting (chỉnh sửa vùng ảnh)
+- Image Inpainting (chỉnh sửa vùng ảnh)
 - Image Expansion
+- Image Colorization
 - Image Segmentation
+- Face Refinement
 - Super Resolution (SRGAN)
 
 ## Yêu cầu hệ thống
