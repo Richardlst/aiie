@@ -1,231 +1,239 @@
-# 🎨 AIIE - AI Image Enhancement Platform
+# AIIE - AI Image Enhancement Platform
 
-Nền tảng xử lý và tạo ảnh AI với các tính năng:
-- 🤖 AI Agent Chat với khả năng tạo và chỉnh sửa ảnh
-- 🎨 Text-to-Image (Stable Diffusion)
-- 🖼️ Image-to-Image transformation
-- ✏️ Inpainting (chỉnh sửa vùng ảnh)
-- 📐 Image Expansion
-- 🔍 Image Segmentation
-- ⬆️ Super Resolution (SRGAN)
+AIIE là nền tảng xử lý và tạo ảnh AI với AI Agent Chat. Các tính năng chính:
 
-## 📋 Yêu cầu hệ thống
+- AI Agent Chat tích hợp LangChain và LangGraph
+- Text-to-Image (Stable Diffusion)
+- Image-to-Image transformation
+- Image Inpainting (chỉnh sửa vùng ảnh)
+- Image Expansion
+- Image Colorization
+- Image Segmentation
+- Face Refinement
+- Super Resolution (SRGAN)
 
-- ✅ Node.js v18+
-- ✅ Python 3.13+
-- ✅ Docker Desktop
-- ✅ 8GB+ RAM (16GB khuyến nghị)
-- ✅ 10GB+ dung lượng ổ cứng trống
+## Yêu cầu hệ thống
 
-## 🚀 Cài đặt nhanh
+- Node.js v18 hoặc cao hơn
+- Python 3.13 hoặc cao hơn
+- Docker Desktop
+- 8 GB RAM tối thiểu (16 GB khuyến nghị)
+- OpenAI API key
 
-### 1. Clone và cài đặt dependencies
+## Cài đặt và khởi động nhanh
 
-```powershell
-# Đã cài đặt xong! Bỏ qua bước này nếu đã chạy lệnh cài đặt
-```
+### Bước 1: Cấu hình biến môi trường
 
-### 2. Cấu hình OpenAI API Key
+Sao chép file `aiie-agent-api\.env.example` thành `aiie-agent-api\.env` và cập nhật:
 
-Mở file `aiie-agent-api\.env` và thay thế:
 ```env
+# Database
+DB_NAME=aiie_db
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_HOST=localhost
+DB_PORT=5433
+
+# OpenAI (bắt buộc)
 OPENAI_API_KEY=sk-your-openai-api-key-here
+OPENAI_MODEL=gpt-4-mini
+
+# Services
+SD_API_URL=http://localhost:8001
+SRGAN_API_URL=http://localhost:8002
+
+# MinIO
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_RETURN_ENDPOINT=http://localhost:9000
+MINIO_SECURE=false
+
+# LangChain (tuỳ chọn)
+LANGCHAIN_TRACING_V2=false
 ```
 
-Lấy API key tại: https://platform.openai.com/api-keys
+Lấy OpenAI API key tại: https://platform.openai.com/api-keys
 
-### 3. Khởi động tất cả services
+### Bước 2: Khởi động tất cả services
+
+Chạy script tự động:
 
 ```powershell
-# Chạy script tự động
 .\start-all.ps1
 ```
 
-**Hoặc chạy thủ công từng service:**
+Script này sẽ:
+- Kiểm tra Docker
+- Khởi động PostgreSQL (port 5433)
+- Khởi động MinIO (port 9000/9001)
+- Khởi động Agent API (port 8000)
+- Khởi động Stable Diffusion API (port 8001)
+- Khởi động SRGAN API (port 8002)
+- Khởi động Frontend (port 5173)
 
-#### Terminal 1: PostgreSQL & MinIO (Docker)
+### Bước 3: Tạo bucket MinIO (lần đầu)
+
+1. Truy cập http://localhost:9001
+2. Đăng nhập: minioadmin / minioadmin
+3. Tạo bucket tên: aiie-storage
+4. Chọn Access Policy: Public
+
+### Bước 4: Truy cập ứng dụng
+
+- Frontend: http://localhost:5173
+- Agent API: http://localhost:8000/docs
+- SD API: http://localhost:8001/docs
+- SRGAN API: http://localhost:8002/docs
+- MinIO: http://localhost:9001
+
+### Dừng tất cả services
+
 ```powershell
-# PostgreSQL
-docker run -d --name aiie-postgres -e POSTGRES_DB=aiie_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:15
-
-# MinIO
-docker run -d --name aiie-minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin minio/minio server /data --console-address ":9001"
+.\stop-all.ps1
 ```
 
-#### Terminal 2: Agent API
+## Khởi động thủ công (tùy chọn)
+
+Nếu muốn khởi động từng service riêng lẻ:
+
+PostgreSQL:
+
+```powershell
+docker run -d --name aiie-postgres `
+  -e POSTGRES_DB=aiie_db `
+  -e POSTGRES_USER=postgres `
+  -e POSTGRES_PASSWORD=postgres `
+  -p 5433:5432 `
+  postgres:15
+```
+
+MinIO:
+
+```powershell
+docker run -d --name aiie-minio `
+  -p 9000:9000 `
+  -p 9001:9001 `
+  -e MINIO_ROOT_USER=minioadmin `
+  -e MINIO_ROOT_PASSWORD=minioadmin `
+  minio/minio server /data --console-address ":9001"
+```
+
+Agent API:
+
 ```powershell
 cd aiie-agent-api
 .\venv\Scripts\activate
 uvicorn app.main:app --reload --port 8000
 ```
 
-#### Terminal 3: Stable Diffusion API
+Stable Diffusion API:
+
 ```powershell
 cd aiie-sd-api
 .\venv\Scripts\activate
+$env:PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'
 uvicorn app.main:app --reload --port 8001
 ```
 
-#### Terminal 4: SRGAN API
+SRGAN API:
+
 ```powershell
 cd aiie-srgan-api
 .\venv\Scripts\activate
-uvicorn app.main:app --reload --port 8002
+python -m uvicorn app.main:app --reload --port 8002
 ```
 
-#### Terminal 5: Frontend
+Frontend:
+
 ```powershell
 cd aiie-ui
 npm run dev
 ```
 
-### 4. Cấu hình MinIO (Chỉ lần đầu)
-
-1. Truy cập: http://localhost:9001
-2. Đăng nhập với:
-   - Username: `minioadmin`
-   - Password: `minioadmin`
-3. Tạo bucket mới tên: `aiie-storage`
-4. Set bucket policy là **Public** (để có thể truy cập ảnh)
-
-### 5. Truy cập ứng dụng
-
-- **🌐 Frontend**: http://localhost:5173
-- **📚 Agent API Docs**: http://localhost:8000/docs
-- **🎨 SD API Docs**: http://localhost:8001/docs
-- **⬆️ SRGAN API Docs**: http://localhost:8002/docs
-- **💾 MinIO Console**: http://localhost:9001
-
-## 🛑 Dừng tất cả services
-
-```powershell
-.\stop-all.ps1
-```
-
-## 📁 Cấu trúc dự án
-
-```
-aiie/
-├── aiie-agent-api/          # Backend chính
-│   ├── app/
-│   │   ├── api/            # API routes
-│   │   ├── core/           # Core config, DB
-│   │   ├── models/         # Database models
-│   │   └── main.py         # Entry point
-│   ├── venv/               # Python virtual environment
-│   └── .env                # Environment variables
-│
-├── aiie-sd-api/            # Stable Diffusion service
-│   ├── app/
-│   │   ├── services/       # SD pipelines
-│   │   └── main.py
-│   └── .env
-│
-├── aiie-srgan-api/         # Super Resolution service
-│   ├── app/
-│   │   └── main.py
-│   └── .env
-│
-├── aiie-ui/                # React frontend
-│   ├── src/
-│   │   ├── components/     # React components
-│   │   ├── pages/          # Page components
-│   │   ├── services/       # API services
-│   │   └── App.tsx
-│   └── .env
-│
-├── start-all.ps1           # Script khởi động
-├── stop-all.ps1            # Script dừng
-└── README.md               # File này
-```
-
-## ⚙️ Cấu hình nâng cao
+## Cấu hình nâng cao
 
 ### Thay đổi model Stable Diffusion
 
-Mở `aiie-sd-api\.env` và thay đổi:
+Cập nhật biến `DEFAULT_MODEL` trong `aiie-sd-api\.env`:
+
 ```env
-DEFAULT_MODEL=runwayml/stable-diffusion-v1-5
+DEFAULT_MODEL=stabilityai/stable-diffusion-xl-base-1.0
 ```
 
-Các model khác có thể dùng:
-- `stabilityai/stable-diffusion-2-1`
-- `stabilityai/stable-diffusion-xl-base-1.0`
+Các model khác:
+- stabilityai/stable-diffusion-2-1
+- runwayml/stable-diffusion-v1-5
 
 ### Sử dụng GPU
 
-Nếu có NVIDIA GPU với CUDA:
+Để sử dụng NVIDIA GPU:
+
 1. Cài đặt CUDA Toolkit
-2. Cài đặt PyTorch với CUDA support
-3. Services sẽ tự động detect và sử dụng GPU
+2. Cài đặt PyTorch CUDA version
+3. Thiết lập: `$env:PYTORCH_CUDA_ALLOC_CONF='expandable_segments:True'`
+4. Services sẽ tự động sử dụng GPU
 
-## 🐛 Troubleshooting
+## Kiến trúc dự án
 
-### Lỗi: "Connection refused" khi gọi API
+Dự án gồm 4 service chính:
 
-**Nguyên nhân**: Service chưa khởi động hoặc port bị chiếm
-**Giải pháp**: 
-- Kiểm tra service đang chạy
-- Kiểm tra port không bị chiếm: `netstat -ano | findstr :8000`
+**aiie-agent-api** (FastAPI + LangChain + LangGraph)
+- AI Agent chat backend
+- Quản lý database (PostgreSQL)
+- API REST để gọi các services khác
+- Authentication và authorization
+- Dependencies: FastAPI, LangChain, SQLModel, MinIO client
 
-### Lỗi: "Database connection failed"
+**aiie-sd-api** (FastAPI + Diffusers)
+- Stable Diffusion pipelines
+- Text-to-Image, Image-to-Image, Inpainting, Expansion
+- Model caching và optimization
 
-**Nguyên nhân**: PostgreSQL chưa chạy
-**Giải pháp**:
+**aiie-srgan-api** (FastAPI + TensorFlow)
+- Super Resolution sử dụng SRGAN
+- Image upscaling
+
+**aiie-ui** (React + TypeScript + Vite)
+- Frontend chat interface
+- Image generation và editing UI
+- Ant Design components
+
+## Xử lý sự cố
+
+### Docker not running
+
+Khởi động Docker Desktop trước khi chạy start-all.ps1.
+
+### Connection refused khi gọi API
+
+Kiểm tra service đang chạy:
+
 ```powershell
-docker start aiie-postgres
-# Hoặc
-docker ps -a  # Kiểm tra container
+netstat -ano | findstr :8000
 ```
 
-### Lỗi: "MinIO bucket not found"
+### Database connection failed
 
-**Nguyên nhân**: Chưa tạo bucket
-**Giải pháp**: Truy cập http://localhost:9001 và tạo bucket `aiie-storage`
+Kiểm tra PostgreSQL container:
 
-### Lỗi: "Out of memory" khi chạy SD API
+```powershell
+docker ps
+docker logs aiie-postgres
+```
 
-**Nguyên nhân**: Không đủ RAM/VRAM
-**Giải pháp**:
-- Đóng các ứng dụng khác
-- Sử dụng model nhỏ hơn
-- Giảm batch size trong code
+### MinIO bucket not found
 
-### Lần đầu chạy SD API rất lâu
+Tạo bucket tại http://localhost:9001 với tên aiie-storage.
 
-**Bình thường!** Lần đầu tiên SD API sẽ tải model từ Hugging Face (~4GB), có thể mất 10-30 phút tùy tốc độ mạng.
+### SD API khởi động lâu
 
-## 📝 Ghi chú
+Lần đầu chạy sẽ tải model (~4 GB) từ Hugging Face. Có thể mất 10-30 phút.
 
-- **Lần đầu chạy**: Agent API sẽ tự động tạo các bảng trong database
-- **Model caching**: Các model AI sẽ được cache sau lần đầu tải
-- **Development mode**: Tất cả services đang chạy ở chế độ development với auto-reload
+## Ghi chú
 
-## 🔒 Bảo mật
+- Agent API tự động tạo database schema khi khởi động
+- Tất cả services chạy ở development mode với auto-reload
+- PostgreSQL chạy trên port 5433 (không 5432)
+- Lần đầu chạy SD API sẽ tải model từ Hugging Face
 
-**⚠️ QUAN TRỌNG**: Đây là cấu hình development. Trước khi deploy production:
-
-1. Thay đổi tất cả passwords trong `.env`
-2. Thay đổi `SECRET_KEY` trong `aiie-agent-api\.env`
-3. Cấu hình CORS đúng cách (không dùng `allow_origins=["*"]`)
-4. Sử dụng HTTPS
-5. Cấu hình firewall và security groups
-
-## 📚 Tài liệu API
-
-Sau khi khởi động services, truy cập:
-- http://localhost:8000/docs - Agent API (Swagger UI)
-- http://localhost:8001/docs - SD API
-- http://localhost:8002/docs - SRGAN API
-
-## 🤝 Đóng góp
-
-Dự án này đang trong giai đoạn phát triển. Mọi đóng góp đều được hoan nghênh!
-
-## 📄 License
-
-[Thêm license của bạn ở đây]
-
----
-
-**Chúc bạn sử dụng vui vẻ! 🎉**
